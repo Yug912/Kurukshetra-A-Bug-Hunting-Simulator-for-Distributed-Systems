@@ -73,8 +73,8 @@ func TestControllerLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if re.ClientURL != n2.ClientURL {
-		t.Logf("note: n2 client port changed on restart: %s -> %s", n2.ClientURL, re.ClientURL)
+	if re.ClientURL != n2.ClientURL || re.PeerHostAddr != n2.PeerHostAddr {
+		t.Fatalf("ports changed on restart: %+v -> %+v", n2, re)
 	}
 	if err := WaitHealthy(ctx, re.ClientURL, 30*time.Second); err != nil {
 		t.Fatalf("n2 after restart: %v", err)

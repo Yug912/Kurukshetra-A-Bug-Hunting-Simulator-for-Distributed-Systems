@@ -15,6 +15,7 @@ import (
 	"io"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -135,13 +136,52 @@ func envList(env map[string]string) []string {
 }
 
 // Start creates the node's volume (if named) and container, starts it and
-// reads back its published ports.
+// reads back its published ports. Host ports are chosen up front (free ports on
+// 127.0.0.1) and bound explicitly, so they stay the same across Kill/Restart.
 func (c *Controller) Start(ctx context.Context, spec NodeSpec) (Node, error) {
 	labels := Labels(spec.RunID, spec.Name)
 	if spec.Volume != "" {
 		if _, err := c.cli.VolumeCreate(ctx, volume.CreateOptions{Name: spec.Volume, Labels: labels}); err != nil {
 			return Node{}, fmt.Errorf("create volume for %s: %w", spec.Name, err)
 		}
+	}
+	var lastErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		n, err := c.startOnce(ctx, spec, labels)
+		if err == nil {
+			return n, nil
+		}
+		lastErr = err
+		if !isPortConflict(err) {
+			return n, err
+		}
+	}
+	return Node{}, lastErr
+}
+
+func isPortConflict(err error) bool {
+	m := err.Error()
+	return strings.Contains(m, "port is already allocated") || strings.Contains(m, "address already in use")
+}
+
+// FreePort returns a currently free TCP port on 127.0.0.1.
+func FreePort() (int, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, err
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
+func (c *Controller) startOnce(ctx context.Context, spec NodeSpec, labels map[string]string) (Node, error) {
+	hp, err := FreePort()
+	if err != nil {
+		return Node{}, err
+	}
+	hc2, err := FreePort()
+	if err != nil {
+		return Node{}, err
 	}
 	peer := nat.Port(fmt.Sprintf("%d/tcp", spec.PeerPort))
 	cport := nat.Port(fmt.Sprintf("%d/tcp", spec.ClientPort))
@@ -155,8 +195,8 @@ func (c *Controller) Start(ctx context.Context, spec NodeSpec) (Node, error) {
 	hc := &container.HostConfig{
 		NetworkMode: container.NetworkMode(spec.Network),
 		PortBindings: nat.PortMap{
-			peer:  {{HostIP: "127.0.0.1", HostPort: "0"}},
-			cport: {{HostIP: "127.0.0.1", HostPort: "0"}},
+			peer:  {{HostIP: "127.0.0.1", HostPort: strconv.Itoa(hp)}},
+			cport: {{HostIP: "127.0.0.1", HostPort: strconv.Itoa(hc2)}},
 		},
 		ExtraHosts: []string{"host.docker.internal:host-gateway"},
 	}
@@ -175,6 +215,7 @@ func (c *Controller) Start(ctx context.Context, spec NodeSpec) (Node, error) {
 		return Node{}, fmt.Errorf("create container %s: %w", name, err)
 	}
 	if err := c.cli.ContainerStart(ctx, created.ID, container.StartOptions{}); err != nil {
+		_ = c.cli.ContainerRemove(context.WithoutCancel(ctx), created.ID, container.RemoveOptions{Force: true})
 		return Node{}, fmt.Errorf("start container %s: %w", name, err)
 	}
 	n := Node{ID: created.ID, Name: spec.Name}
@@ -190,6 +231,11 @@ func (c *Controller) readPorts(ctx context.Context, n *Node, peer, cport nat.Por
 		info, err := c.cli.ContainerInspect(ctx, n.ID)
 		if err != nil {
 			return fmt.Errorf("inspect %s: %w", n.Name, err)
+		}
+		if info.State != nil && !info.State.Running && info.State.Status == "exited" {
+			var tail strings.Builder
+			_ = c.CopyLogs(ctx, n.ID, &tail)
+			return fmt.Errorf("node %s exited with code %d before publishing ports; logs:\n%s", n.Name, info.State.ExitCode, lastLines(tail.String(), 10))
 		}
 		if info.NetworkSettings != nil {
 			p := hostPort(info.NetworkSettings.Ports, peer)
@@ -226,9 +272,8 @@ func (c *Controller) Kill(ctx context.Context, id string) error {
 	return c.waitRunning(ctx, id, false)
 }
 
-// Restart starts the same (stopped) container again; its volume keeps the data.
-// Published host ports are kept because they are re-bound from the original
-// binding — but a 0 (random) binding can change, so callers re-read them with Inspect.
+// Restart starts the same (stopped) container again; its volume keeps the data
+// and its explicitly bound host ports stay the same.
 func (c *Controller) Restart(ctx context.Context, id string) error {
 	if err := c.cli.ContainerStart(ctx, id, container.StartOptions{}); err != nil {
 		return fmt.Errorf("restart %s: %w", short(id), err)
@@ -376,6 +421,14 @@ func (c *Controller) ListRun(ctx context.Context, runID string) ([]string, error
 		out = append(out, strings.TrimPrefix(firstName(ct.Names), "/"))
 	}
 	return out, nil
+}
+
+func lastLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 func firstName(names []string) string {
