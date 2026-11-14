@@ -2,7 +2,7 @@
 
 ## Status
 
-M1–M7 done and Checkpoint #2 pushed; M8 (real-world target) next. Person A's engine is not on `main` yet, so engine-dependent acceptance steps are pending. Work happens on branch `anushka` (Anushka's own branch, standing in for `feat/brain`).
+M1–M8 done; M9 (docs and demo) next. Person A's engine is not on `main` yet, so engine-dependent acceptance steps are pending. Work happens on branch `anushka` (Anushka's own branch, standing in for `feat/brain`).
 
 ## Milestones
 
@@ -15,7 +15,7 @@ M1–M7 done and Checkpoint #2 pushed; M8 (real-world target) next. Person A's e
 - [x] **M6 kuru serve** (2026-11-14). Go tests with temp runs dirs pass. They cover the list (newest first, seed/verdict/fidelity/faults/replay_of; hidden `.shrink-*` and empty folders skipped; missing runs dir → `[]`), file fetch (trace, logs/n1.log, meta), summary.csv → JSON, 12 rejected requests (non-allow-listed file, symlink out of the runs dir, `..` in every position incl. `%2e%2e` and `..%2f`, missing run, hidden dir), SPA fallback, 404 for missing assets, the missing-web-dir page ("make web", 503) and CORS for :5173 only. Manual run: `make web && kuru serve --runs-dir <tmp with sample/42>` → `/api/runs` lists `sample/42` FAIL with 2 faults, `linearizability.html` served as text/html, and `/?run=sample/42` renders the timeline through the API.
 - [x] **M7 Viewer v2** (2026-11-14). `npm test` passes 19 tests. The 7 new ones cover the player reducer (step/seek/clamp, play/tick at speed, stop at end, restart from end, keys), the cluster state at a step (up/down/paused, partition groups, clock offsets, leader from `note` events with `meta.leader`) and URL state round-trip/junk handling. `npm run build` passes. Manual check against `kuru serve`: the run list (filters by scenario/verdict, "vs original"/"vs minimal" links, see `?`), the player at `?run=sample/42&step=405&from=300&to=700` ([docs/timeline-player.png](timeline-player.png): playhead, events after it dimmed, cluster box shows partition n1 | n2,n3), compare mode `?run=sample/42&compare=sample/42-min` with synced playhead and viewport, and the URL updated by `history.replaceState`. A check against a real failing toy KV run waits for Person A's engine.
 - [x] **Checkpoint #2** (2026-11-14): `origin/main` is still at c8aa64f; all tests pass; pushed to `anushka`. No PR (no `gh`; the human wants work only on their branch). The explore → shrink → replay → serve loop waits for Person A's engine on `main`.
-- [ ] M8 Real-world target
+- [x] **M8 Real-world target: etcd** (2026-11-14). See [targets/etcd/README.md](../targets/etcd/README.md). Bug: [Jepsen etcd/Consul 2014](https://aphyr.com/posts/316-call-me-maybe-etcd-and-consul) stale reads. `kuru/etcd:buggy` = etcd v2.3.8 (v2 default reads), built from pinned source with Go 1.10. `kuru/etcd:fixed` = etcd v3.5.17 (v3 reads are linearizable by default). `kuru-etcd-shim` handles stable peer URLs + local TCP forwarders to `PEERS`, `/kuru/health`, `/kuru/clock` → 404 and a reverse proxy. Workload `etcd-kv` (v2/v3 chosen by `/version`) is unit-tested against fake v2 and v3 servers, and both histories check PASS. Engine-free evidence: `go test -tags integration -run 'Etcd.*Partition' ./pkg/workload` (one follower cut off from its peers for 6 s with `docker network disconnect` while clients still reach it) gives **buggy FAIL 4/4** ("stale read of k0 on n3: got c1-29, expected c3-27") and **fixed PASS 4/4** (linearizable-kv and durability). Added `examples/real-etcd-{buggy,fixed}.yaml` (`mode: tcp`). The 200-run explore acceptance waits for Person A's engine with stream mode.
 - [ ] M9 Docs and demo
 
 ## Decisions
@@ -44,6 +44,9 @@ M1–M7 done and Checkpoint #2 pushed; M8 (real-world target) next. Person A's e
 18. **Player.** 1× = 100 steps/s (real time at the default 2 ms/step would play a 3,000-step run in 6 s at 1×); speeds are 1–50×. Stepping pauses playback, playing from the end restarts at 0, and the view follows the playhead while playing. Keyboard: space, ←/→, shift+←/→ (ignored while typing in inputs). The leader comes from trace `note` events with `meta.leader`; Person A's engine may or may not emit these, and the box says "unknown" otherwise.
 19. **URL.** `?run=&compare=&step=&from=&to=&filters=` where filters = `n:n2;k:drop,deliver;c:3;p:/peer/x` (hidden items). `replay_of` paths are mapped to run ids by their last two segments.
 
+20. **Workload backends.** `kv` and `etcd-kv` share one register workload (`KV`) with a pluggable `backend` (`protocolBackend`, `etcdBackend`). The per-op timeout now wraps the backend call. Final reads retry on `fail` results (421/503 for `kv`).
+21. **etcd version probe.** `etcd-kv` caches each node's API from `GET /version`. If the probe fails, the op is recorded as `fail` (nothing was sent) and the probe is retried next time.
+
 ## Contract change requests
 
 - None yet. (Note: `gofmt -l` reports `pkg/core/core.go` as not gofmt-clean with Go 1.26.11. It is a shared file, so I left it alone.)
@@ -54,4 +57,4 @@ M1–M7 done and Checkpoint #2 pushed; M8 (real-world target) next. Person A's e
 
 ## Next step
 
-M8: pick a Jepsen-analysed system that runs as 3 Docker nodes with a documented old-version bug and a fixed version; build `targets/<name>` (Dockerfiles, entrypoint, /kuru/health sidecar), a `<name>-kv` workload, and `examples/real-<name>-{buggy,fixed}.yaml`. Fallback: document why it failed and make toy KV's three bug flags the full demo.
+M9: write `docs/brain.md` (design, bug flags, workload semantics, checkers, shrinker, viewer guide, serve API, README snippet), `docs/demo.md` (4-minute script + backup plan) and `scripts/brain-demo-prep.sh`.

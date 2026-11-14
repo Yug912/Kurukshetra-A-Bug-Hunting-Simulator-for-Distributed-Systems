@@ -1,0 +1,20 @@
+# Real-world target: etcd v2.3.8 (v2 API, default reads may be stale). Needs Person A's engine with stream mode (mode: tcp).
+# kuru explore examples/real-etcd-buggy.yaml --runs 200
+name: real-etcd-buggy
+nodes: 3
+image: kuru/etcd:buggy
+mode: tcp
+workload:
+  type: etcd-kv
+  clients: 4
+  keys: 2
+  ops_per_sec: 40
+  timeout_ms: 1000
+checkers: [linearizable-kv, durability]
+duration_steps: 4000
+quiet_steps: 1500
+faults:
+  partition_every: [300, 600]
+  partition_len: [300, 600]
+  crash_every: [800, 1200]
+  crash_len: [200, 400]

@@ -1,0 +1,27 @@
+# kuru/etcd:fixed — etcd v3.5.17 (v3 API; reads are linearizable by default)
+# Build from the repo root: docker build -t kuru/etcd:fixed -f targets/etcd/Dockerfile.fixed .
+FROM golang:1.26 AS shim
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY targets/etcd/shim/ targets/etcd/shim/
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /kuru-etcd-shim ./targets/etcd/shim
+
+FROM alpine:3.21
+ARG ETCD_VERSION=v3.5.17
+ARG SHA_AMD64=eff6ac621d41711085d0f38fab17d8fa3705f6326c3ff11301a1f5a71fc94edd
+ARG SHA_ARM64=7d717a62520bf39fa1115dfbb1df79479ff74b5eda0914f4132bfa60a48b9549
+RUN case "$(uname -m)" in \
+      x86_64) A=amd64; S=${SHA_AMD64} ;; \
+      aarch64) A=arm64; S=${SHA_ARM64} ;; \
+      *) echo "unsupported arch $(uname -m)"; exit 1 ;; \
+    esac \
+ && wget -qO /tmp/etcd.tgz https://github.com/etcd-io/etcd/releases/download/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-${A}.tar.gz \
+ && echo "${S}  /tmp/etcd.tgz" | sha256sum -c - \
+ && tar xzf /tmp/etcd.tgz -C /tmp \
+ && mv /tmp/etcd-${ETCD_VERSION}-linux-${A}/etcd /usr/local/bin/etcd \
+ && rm -rf /tmp/etcd*
+COPY --from=shim /kuru-etcd-shim /usr/local/bin/kuru-etcd-shim
+ENV PEER_LISTEN=:7000 CLIENT_LISTEN=:8080 DATA_DIR=/data ETCD_BIN=/usr/local/bin/etcd
+EXPOSE 7000 8080
+VOLUME /data
+ENTRYPOINT ["/usr/local/bin/kuru-etcd-shim"]

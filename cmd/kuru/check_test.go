@@ -102,3 +102,15 @@ func TestToyKVExamplesParse(t *testing.T) {
 		}
 	}
 }
+
+func TestRealEtcdExamplesParse(t *testing.T) {
+	for _, tag := range []string{"buggy", "fixed"} {
+		sc, err := scenario.Load(filepath.Join("..", "..", "examples", "real-etcd-"+tag+".yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sc.Image != "kuru/etcd:"+tag || sc.Mode != "tcp" || sc.Workload.Type != "etcd-kv" {
+			t.Fatalf("%s: %+v", tag, sc)
+		}
+	}
+}
