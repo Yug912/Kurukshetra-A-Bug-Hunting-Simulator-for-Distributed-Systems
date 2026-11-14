@@ -1,0 +1,36 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          if [ -f web/timeline/package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.check.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - if: steps.check.outputs.present == 'true'
+        working-directory: web/timeline
+        run: |
+          npm ci
+          npm run build
+          npm test --if-present

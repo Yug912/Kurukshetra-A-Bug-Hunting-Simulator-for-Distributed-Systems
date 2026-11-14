@@ -1,9 +1,3 @@
-run:
-  timeout: 5m
+version: "2"
 linters:
-  enable:
-    - govet
-    - errcheck
-    - staticcheck
-    - ineffassign
-    - unused
+  default: standard
