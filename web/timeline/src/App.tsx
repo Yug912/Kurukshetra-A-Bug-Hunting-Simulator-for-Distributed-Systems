@@ -2,41 +2,47 @@ import { useEffect, useState } from "react";
 import { loadRun } from "./data/load";
 import { buildModel, type RunModel } from "./data/model";
 import { syntheticRun } from "./data/synthetic";
-import { RunView } from "./view/RunView";
+import { parseUrl } from "./data/url";
+import { RunList } from "./view/RunList";
+import { RunPage } from "./view/RunPage";
 
-/** useModel loads and derives one run by id ("sample", "synthetic" or "<scenario>/<run>"). */
-export function useModel(id: string | null): { model: RunModel | null; error: string | null } {
-  const [state, setState] = useState<{ model: RunModel | null; error: string | null }>({ model: null, error: null });
+async function load(id: string): Promise<RunModel> {
+  const run = id === "synthetic" ? syntheticRun(50_000) : await loadRun(id);
+  return buildModel(run);
+}
+
+/** useModels loads one or two runs by id ("sample", "synthetic" or "<scenario>/<run>"). */
+function useModels(ids: (string | null)[]): { models: (RunModel | null)[]; error: string | null; loading: boolean } {
+  const key = ids.join("|");
+  const [state, setState] = useState<{ models: (RunModel | null)[]; error: string | null; loading: boolean }>({ models: [], error: null, loading: true });
   useEffect(() => {
-    if (!id) return;
     let live = true;
-    setState({ model: null, error: null });
-    const load = id === "synthetic" ? Promise.resolve(syntheticRun(50_000)) : loadRun(id);
-    load
-      .then((run) => live && setState({ model: buildModel(run), error: null }))
-      .catch((e: Error) => live && setState({ model: null, error: `Could not load run ${id}: ${e.message}` }));
+    setState({ models: [], error: null, loading: true });
+    Promise.all(ids.map((id) => (id ? load(id).catch((e: Error) => Promise.reject(new Error(`run ${id}: ${e.message}`))) : Promise.resolve(null))))
+      .then((models) => live && setState({ models, error: null, loading: false }))
+      .catch((e: Error) => live && setState({ models: [], error: `Could not load ${e.message}`, loading: false }));
     return () => {
       live = false;
     };
-  }, [id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
   return state;
 }
 
 export function App() {
-  const id = new URLSearchParams(location.search).get("run");
-  const { model, error } = useModel(id);
-  if (!id) {
+  const initial = parseUrl(location.search);
+  if (!initial.run) return <RunList />;
+  return <RunRoute initial={initial} />;
+}
+
+function RunRoute({ initial }: { initial: ReturnType<typeof parseUrl> }) {
+  const { models, error, loading } = useModels([initial.run, initial.compare]);
+  if (error)
     return (
-      <div className="error" style={{ color: "inherit" }}>
-        Open a run with <code>?run=sample</code> (bundled sample), <code>?run=synthetic</code> (50,000 events) or <code>?run=&lt;scenario&gt;/&lt;run&gt;</code> via <code>kuru serve</code>.
+      <div className="error">
+        {error}. <a href="?">All runs</a> · <a href="?run=sample">sample</a>
       </div>
     );
-  }
-  if (error) return <div className="error">{error}</div>;
-  if (!model) return <div className="note">Loading {id}…</div>;
-  return (
-    <div className="app">
-      <RunView model={model} />
-    </div>
-  );
+  if (loading || !models[0]) return <div className="note">Loading {initial.run}…</div>;
+  return <RunPage model={models[0]} compare={models[1] ?? null} initial={initial} />;
 }
