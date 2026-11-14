@@ -15,6 +15,7 @@ type MessageDecision struct {
 
 // Decisions extracts the decision of every message ID in a trace.
 // Priority when a message has several events: dup > delay > drop > deliver.
+// Events with meta dir=reply (tcp mode's piped reply direction) are ignored.
 func Decisions(evs []trace.Event) map[string]MessageDecision {
 	rank := func(k string) int {
 		switch {
@@ -29,6 +30,9 @@ func Decisions(evs []trace.Event) map[string]MessageDecision {
 	}
 	out := map[string]MessageDecision{}
 	for _, e := range evs {
+		if e.Meta["dir"] == "reply" { // tcp reply direction: piped, not decided
+			continue
+		}
 		var k string
 		switch e.Kind {
 		case trace.MsgDup:

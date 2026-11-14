@@ -147,3 +147,29 @@ func TestReplayFidelity(t *testing.T) {
 	}
 	assertNoLeaks(t, "fake-smoke", 3)
 }
+
+func TestRunTCPMode(t *testing.T) {
+	needDocker(t)
+	sc, err := scenario.Load(filepath.Join("..", "..", "examples", "engine-tcp-smoke.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := (&Runner{}).Run(context.Background(), sc, 1, core.RunOptions{OutRoot: t.TempDir(), Quiet: true})
+	if err != nil || info.Result.Verdict != core.VerdictPass {
+		t.Fatalf("%v %+v", err, info.Result)
+	}
+	evs, _ := trace.ReadFile(filepath.Join(info.Dir, core.TraceFile))
+	var tcpSends, replies int
+	for _, e := range evs {
+		if e.Kind == trace.MsgSend && e.Meta["mode"] == "tcp" && e.Meta["dir"] == "" {
+			tcpSends++
+		}
+		if e.Kind == trace.MsgDeliver && e.Meta["dir"] == "reply" {
+			replies++
+		}
+	}
+	if tcpSends < 100 || replies < 100 {
+		t.Fatalf("tcp sends %d replies %d", tcpSends, replies)
+	}
+	assertNoLeaks(t, "engine-tcp-smoke", 1)
+}
