@@ -20,7 +20,7 @@ func init() {
 			if err != nil {
 				return err
 			}
-			defer c.Close()
+			defer func() { _ = c.Close() }()
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
 			if err := c.Ping(ctx); err != nil {
@@ -29,15 +29,15 @@ func init() {
 			rm, err := c.CleanupAll(ctx)
 			out := cmd.OutOrStdout()
 			for _, n := range rm.Containers {
-				fmt.Fprintln(out, "container", n)
+				_, _ = fmt.Fprintln(out, "container", n)
 			}
 			for _, n := range rm.Networks {
-				fmt.Fprintln(out, "network  ", n)
+				_, _ = fmt.Fprintln(out, "network  ", n)
 			}
 			for _, n := range rm.Volumes {
-				fmt.Fprintln(out, "volume   ", n)
+				_, _ = fmt.Fprintln(out, "volume   ", n)
 			}
-			fmt.Fprintf(out, "removed %s\n", rm)
+			_, _ = fmt.Fprintf(out, "removed %s\n", rm)
 			return err
 		},
 	})

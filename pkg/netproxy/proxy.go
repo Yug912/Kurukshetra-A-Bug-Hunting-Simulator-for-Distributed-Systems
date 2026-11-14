@@ -135,7 +135,7 @@ func New(nodes []string, targets map[string]string, clock core.StepClock, tw *tr
 			}
 			l, err := listenUnshadowed()
 			if err != nil {
-				p.Close()
+				_ = p.Close()
 				return nil, fmt.Errorf("proxy listen %s->%s: %w", from, to, err)
 			}
 			lk := link{from, to}
@@ -171,12 +171,12 @@ func listenUnshadowed() (net.Listener, error) {
 		port := l.Addr().(*net.TCPAddr).Port
 		probe, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 		if err == nil {
-			probe.Close()
+			_ = probe.Close()
 			reservePort(port)
 			return l, nil
 		}
 		lastErr = err
-		l.Close()
+		_ = l.Close()
 	}
 	return nil, fmt.Errorf("no unshadowed port: %w", lastErr)
 }
@@ -360,7 +360,7 @@ func (p *Proxy) forward(m *Message) (reply, error) {
 	if err != nil {
 		return reply{}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(io.LimitReader(resp.Body, MaxBody))
 	if err != nil {
 		return reply{}, err

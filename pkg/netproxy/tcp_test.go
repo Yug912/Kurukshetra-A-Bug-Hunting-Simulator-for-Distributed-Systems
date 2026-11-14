@@ -21,7 +21,7 @@ func echoServer(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { l.Close() })
+	t.Cleanup(func() { _ = l.Close() })
 	go func() {
 		for {
 			c, err := l.Accept()
@@ -29,7 +29,7 @@ func echoServer(t *testing.T) string {
 				return
 			}
 			go func() {
-				io.Copy(c, c)
+				_, _ = io.Copy(c, c)
 				closeWrite(c)
 			}()
 		}
@@ -46,7 +46,7 @@ func tcpSetup(t *testing.T) (*Proxy, *trace.Writer, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { p.Close() })
+	t.Cleanup(func() { _ = p.Close() })
 	return p, tw, path
 }
 
@@ -74,7 +74,7 @@ func dial(t *testing.T, p *Proxy, from, to string) net.Conn {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { c.Close() })
+	t.Cleanup(func() { _ = c.Close() })
 	return c
 }
 
@@ -88,7 +88,7 @@ func TestTCPDataIntactInOrderUnderDelays(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		chunk := []byte(fmt.Sprintf("chunk-%d;", i))
 		want.Write(chunk)
-		c.Write(chunk)
+		_, _ = c.Write(chunk)
 		select {
 		case m := <-msgs:
 			held = append(held, m)
@@ -104,7 +104,7 @@ func TestTCPDataIntactInOrderUnderDelays(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	wg.Wait()
-	c.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
 	got, err := io.ReadAll(c)
 	if err != nil {
 		t.Fatal(err)
@@ -112,8 +112,8 @@ func TestTCPDataIntactInOrderUnderDelays(t *testing.T) {
 	if string(got) != want.String() {
 		t.Fatalf("got %q want %q", got, want.String())
 	}
-	p.Close()
-	tw.Close()
+	_ = p.Close()
+	_ = tw.Close()
 	evs, _ := trace.ReadFile(path)
 	var sends, replies int
 	for _, e := range evs {
@@ -137,16 +137,16 @@ func TestTCPDropResets(t *testing.T) {
 	msgs, stop := collector(p)
 	defer stop()
 	c := dial(t, p, "n2", "n1")
-	c.Write([]byte("hello"))
+	_, _ = c.Write([]byte("hello"))
 	m := <-msgs
 	p.Drop(m, "")
-	c.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
 	_, err := c.Read(make([]byte, 10))
 	if err == nil {
 		t.Fatalf("want reset, got %v", err)
 	}
-	p.Close()
-	tw.Close()
+	_ = p.Close()
+	_ = tw.Close()
 	evs, _ := trace.ReadFile(path)
 	found := false
 	for _, e := range evs {
@@ -162,21 +162,21 @@ func TestTCPPartitionRefusesAndResets(t *testing.T) {
 	msgs, stop := collector(p)
 	defer stop()
 	existing := dial(t, p, "n1", "n2")
-	existing.Write([]byte("a"))
+	_, _ = existing.Write([]byte("a"))
 	<-msgs // connection is established and registered
 	p.SetBlocked(map[[2]string]bool{{"n1", "n2"}: true})
-	existing.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_ = existing.SetReadDeadline(time.Now().Add(3 * time.Second))
 	if _, err := existing.Read(make([]byte, 1)); err == nil {
 		t.Fatal("existing connection should be reset")
 	}
 	fresh := dial(t, p, "n1", "n2")
-	fresh.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_ = fresh.SetReadDeadline(time.Now().Add(3 * time.Second))
 	if _, err := fresh.Read(make([]byte, 1)); err == nil {
 		t.Fatal("new connection should be refused")
 	}
 	// The other direction is not partitioned.
 	ok := dial(t, p, "n2", "n1")
-	ok.Write([]byte("z"))
+	_, _ = ok.Write([]byte("z"))
 	select {
 	case m := <-msgs:
 		if m.From != "n2" {
@@ -192,12 +192,12 @@ func TestTCPDuplicateIsDeliver(t *testing.T) {
 	msgs, stop := collector(p)
 	defer stop()
 	c := dial(t, p, "n1", "n2")
-	c.Write([]byte("once"))
+	_, _ = c.Write([]byte("once"))
 	closeWrite(c)
 	var wg sync.WaitGroup
 	p.DuplicateAsync(<-msgs, &wg, nil)
 	wg.Wait()
-	c.SetReadDeadline(time.Now().Add(3 * time.Second))
+	_ = c.SetReadDeadline(time.Now().Add(3 * time.Second))
 	got, _ := io.ReadAll(c)
 	if string(got) != "once" {
 		t.Fatalf("got %q", got)

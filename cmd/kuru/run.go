@@ -48,7 +48,7 @@ Exit code: 0 PASS, 1 FAIL, 2 ERROR or UNKNOWN.`,
 			}
 			if !cmd.Flags().Changed("seed") {
 				seed = randomSeed()
-				fmt.Fprintf(cmd.ErrOrStderr(), "using random seed %d\n", seed)
+				_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "using random seed %d\n", seed)
 			}
 			r, err := core.NewRunner(runnerName())
 			if err != nil {
@@ -66,9 +66,9 @@ Exit code: 0 PASS, 1 FAIL, 2 ERROR or UNKNOWN.`,
 			if runErr != nil && info.Result.Verdict == "" {
 				info.Result.Verdict = core.VerdictError
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), SummaryLine(seed, info))
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), SummaryLine(seed, info))
 			if runErr != nil && verbose() {
-				fmt.Fprintln(cmd.ErrOrStderr(), "error:", runErr)
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "error:", runErr)
 			}
 			os.Exit(ExitCode(info.Result.Verdict))
 			return nil

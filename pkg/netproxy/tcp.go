@@ -143,7 +143,7 @@ func (p *Proxy) readChunks(tc *tcpConn) {
 			tc.mu.Lock()
 			tc.ready[-1] = nil // marker: EOF after nextSeq chunks
 			tc.mu.Unlock()
-			p.flushTCP(tc)
+			_ = p.flushTCP(tc)
 			return
 		}
 	}
@@ -221,8 +221,10 @@ func (p *Proxy) deliverTCPAsync(m *Message, wg *sync.WaitGroup, onErr func(error
 }
 
 // dropTCP resets the connection (a dropped chunk cannot be skipped in a stream).
-func (p *Proxy) dropTCP(m *Message, meta map[string]string) {
-	meta = p.connMeta(m.conn)
+// The caller's meta (path, reason) does not apply to a stream: the drop is
+// always recorded as a reset of the connection.
+func (p *Proxy) dropTCP(m *Message, _ map[string]string) {
+	meta := p.connMeta(m.conn)
 	meta["reason"] = "reset"
 	p.emit(trace.Event{Kind: trace.MsgDrop, From: m.From, To: m.To, MsgID: m.ID, Size: m.Size, Meta: meta})
 	p.killConn(m.conn)

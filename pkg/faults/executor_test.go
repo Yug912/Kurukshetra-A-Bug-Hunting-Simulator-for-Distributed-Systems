@@ -49,7 +49,7 @@ func newClockSrv(t *testing.T, status int) (*clockSrv, string) {
 		var b struct {
 			OffsetMs int64 `json:"offset_ms"`
 		}
-		json.NewDecoder(r.Body).Decode(&b)
+		_ = json.NewDecoder(r.Body).Decode(&b)
 		c.mu.Lock()
 		c.offsets = append(c.offsets, b.OffsetMs)
 		c.mu.Unlock()

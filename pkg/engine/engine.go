@@ -96,7 +96,7 @@ func (r *Runner) Run(ctx context.Context, sc scenario.Scenario, seed int64, opts
 	if err := x.prepareDir(r.Log); err != nil {
 		return core.RunInfo{}, err
 	}
-	defer x.logf.Close()
+	defer func() { _ = x.logf.Close() }()
 
 	err = x.execute(ctx)
 	info, ferr := x.finish(err)
@@ -120,7 +120,7 @@ func (x *run) onError(err error) {
 	x.errCnt++
 	x.errMu.Unlock()
 	if x.logf != nil {
-		fmt.Fprintf(x.logf, "[%s] warn: %v\n", time.Since(x.start).Round(time.Millisecond), err)
+		_, _ = fmt.Fprintf(x.logf, "[%s] warn: %v\n", time.Since(x.start).Round(time.Millisecond), err)
 	}
 }
 
@@ -484,7 +484,7 @@ func (x *run) teardown(ctx context.Context) error {
 			if err := x.ctl.CopyLogs(ctx, x.nodes[name].ID, f); err != nil {
 				x.logln("warn: %v", err)
 			}
-			f.Close()
+			_ = f.Close()
 		}
 		if x.opts.Keep {
 			x.logln("keeping containers of run %s (remove with `kuru cleanup`)", x.runID)
@@ -493,7 +493,7 @@ func (x *run) teardown(ctx context.Context) error {
 				errs = append(errs, fmt.Errorf("cleanup run %s: %w", x.runID, err))
 			}
 		}
-		x.ctl.Close()
+		_ = x.ctl.Close()
 	}
 	return errors.Join(errs...)
 }

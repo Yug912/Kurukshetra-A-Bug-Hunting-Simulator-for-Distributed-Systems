@@ -39,7 +39,7 @@ Exit code: 0 no failures, 1 at least one FAIL, 2 errors but no FAIL.`,
 			ctx, stop := signalContext()
 			defer stop()
 			sum, err := explore.Run(ctx, sc, o)
-			fmt.Fprint(cmd.OutOrStdout(), explore.Report(sum))
+			_, _ = fmt.Fprint(cmd.OutOrStdout(), explore.Report(sum))
 			if err != nil {
 				return err
 			}

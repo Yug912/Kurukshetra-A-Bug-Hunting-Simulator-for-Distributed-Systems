@@ -11,7 +11,7 @@ func TestNamesAndLabels(t *testing.T) {
 	if !strings.HasPrefix(id, "fake-smoke-42-") || len(id) != len("fake-smoke-42-")+6 {
 		t.Fatalf("run id %q", id)
 	}
-	if NewRunID("x", 1) == NewRunID("x", 1) {
+	if a, b := NewRunID("x", 1), NewRunID("x", 1); a == b {
 		t.Fatal("run ids should differ")
 	}
 	if ContainerName("r", "n1") != "kuru-r-n1" {

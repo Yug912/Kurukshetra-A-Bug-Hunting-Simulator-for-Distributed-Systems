@@ -37,7 +37,7 @@ func PortFreeEverywhere(p int) bool {
 		if err != nil {
 			return false
 		}
-		l.Close()
+		_ = l.Close()
 	}
 	return true
 }
@@ -52,7 +52,7 @@ func FreePort() (int, error) {
 			return 0, err
 		}
 		p := l.Addr().(*net.TCPAddr).Port
-		l.Close()
+		_ = l.Close()
 		portMu.Lock()
 		taken := reserved[p]
 		portMu.Unlock()

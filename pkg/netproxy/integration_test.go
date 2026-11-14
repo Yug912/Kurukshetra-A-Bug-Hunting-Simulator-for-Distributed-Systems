@@ -27,7 +27,7 @@ func TestPassThroughWithFakeNodes(t *testing.T) {
 		t.Skip(err)
 	}
 	runID := docker.NewRunID("proxy-itest", 1)
-	defer c.CleanupRun(context.Background(), runID)
+	defer func() { _ = c.CleanupRun(context.Background(), runID) }()
 
 	path := filepath.Join(t.TempDir(), "trace.jsonl")
 	tw, _ := trace.NewWriter(path)
@@ -36,7 +36,7 @@ func TestPassThroughWithFakeNodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 	netID, err := c.CreateNetwork(ctx, "kuru-"+runID, docker.Labels(runID, ""))
 	if err != nil {
 		t.Fatal(err)
@@ -61,8 +61,8 @@ func TestPassThroughWithFakeNodes(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	pcancel()
 	<-done
-	p.Close()
-	tw.Close()
+	_ = p.Close()
+	_ = tw.Close()
 
 	evs, err := trace.ReadFile(path)
 	if err != nil {

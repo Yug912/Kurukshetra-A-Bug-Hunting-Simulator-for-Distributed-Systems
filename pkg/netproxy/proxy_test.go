@@ -35,7 +35,7 @@ func newRecNode(t *testing.T) *recNode {
 		n.hits = append(n.hits, r.URL.Path+"|"+r.Header.Get("X-Kuru-From")+"|"+string(b)+"|"+r.Header.Get("X-Custom"))
 		n.mu.Unlock()
 		w.Header().Set("X-Reply", "yes")
-		fmt.Fprintf(w, "reply:%s", b)
+		_, _ = fmt.Fprintf(w, "reply:%s", b)
 	}))
 	t.Cleanup(n.srv.Close)
 	return n
@@ -63,7 +63,7 @@ func setup(t *testing.T) (*Proxy, map[string]*recNode, *trace.Writer, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { p.Close() })
+	t.Cleanup(func() { _ = p.Close() })
 	return p, nodes, tw, path
 }
 
@@ -75,7 +75,7 @@ func send(t *testing.T, p *Proxy, from, to, path, body string) (*http.Response, 
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, _ := io.ReadAll(resp.Body)
 	return resp, string(b)
 }
@@ -111,7 +111,7 @@ func TestSequentialIDsAndIntactDelivery(t *testing.T) {
 	send(t, p, "n1", "n2", "/peer/append", "after")
 	cancel()
 	<-done
-	tw.Close()
+	_ = tw.Close()
 	evs, _ := trace.ReadFile(path)
 	var ids []string
 	for _, e := range evs {
@@ -156,7 +156,7 @@ func TestDropGives504(t *testing.T) {
 	if resp.StatusCode != http.StatusGatewayTimeout || nodes["n3"].count() != 0 {
 		t.Fatalf("status %d hits %d", resp.StatusCode, nodes["n3"].count())
 	}
-	tw.Close()
+	_ = tw.Close()
 	evs, _ := trace.ReadFile(path)
 	if evs[len(evs)-1].Kind != trace.MsgDrop || evs[len(evs)-1].Meta["reason"] != "test" {
 		t.Fatalf("%+v", evs)
@@ -165,7 +165,7 @@ func TestDropGives504(t *testing.T) {
 
 func TestDuplicateHitsTwice(t *testing.T) {
 	p, nodes, tw, path := setup(t)
-	stop := manual(p, func(m *Message) { go p.Duplicate(m) })
+	stop := manual(p, func(m *Message) { go func() { _ = p.Duplicate(m) }() })
 	resp, body := send(t, p, "n2", "n3", "/peer/x", "d")
 	if resp.StatusCode != 200 || body != "reply:d" {
 		t.Fatal(resp.StatusCode, body)
@@ -178,8 +178,8 @@ func TestDuplicateHitsTwice(t *testing.T) {
 	if nodes["n3"].count() != 2 {
 		t.Fatalf("hits %d", nodes["n3"].count())
 	}
-	p.Close()
-	tw.Close()
+	_ = p.Close()
+	_ = tw.Close()
 	evs, _ := trace.ReadFile(path)
 	kinds := []string{}
 	for _, e := range evs {
@@ -206,7 +206,7 @@ func TestBlockedLinksDropWithPartition(t *testing.T) {
 	if r1.StatusCode != 504 || r2.StatusCode != 200 || nodes["n2"].count() != 0 {
 		t.Fatal(r1.StatusCode, r2.StatusCode)
 	}
-	tw.Close()
+	_ = tw.Close()
 	evs, _ := trace.ReadFile(path)
 	found := false
 	for _, e := range evs {
@@ -231,7 +231,7 @@ func TestSenderGoneStillRecorded(t *testing.T) {
 	if err := p.Deliver(m); err != nil {
 		t.Fatal(err)
 	}
-	tw.Close()
+	_ = tw.Close()
 	evs, _ := trace.ReadFile(path)
 	if evs[len(evs)-1].Kind != trace.MsgDeliver {
 		t.Fatal("decision not recorded")
@@ -248,7 +248,7 @@ func TestCloseIdempotentNoLeak(t *testing.T) {
 		if err := p.Close(); err != nil {
 			t.Fatal(err)
 		}
-		p.Close()
+		_ = p.Close()
 	}
 	time.Sleep(50 * time.Millisecond)
 	if after := runtime.NumGoroutine(); after > before+2 {

@@ -86,11 +86,11 @@ func TestCompare(t *testing.T) {
 
 func TestNextDir(t *testing.T) {
 	d := filepath.Join(t.TempDir(), "run", "7")
-	os.MkdirAll(d, 0o755)
+	_ = os.MkdirAll(d, 0o755)
 	if NextDir(d+"/") != d+"-replay-1" {
 		t.Fatal(NextDir(d))
 	}
-	os.MkdirAll(d+"-replay-1", 0o755)
+	_ = os.MkdirAll(d+"-replay-1", 0o755)
 	if NextDir(d) != d+"-replay-2" {
 		t.Fatal(NextDir(d))
 	}

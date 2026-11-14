@@ -60,7 +60,7 @@ func WaitHealthy(ctx context.Context, clientURL string, timeout time.Duration) e
 		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, clientURL+"/kuru/health", nil)
 		resp, err := hc.Do(req)
 		if err == nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
 				return nil
 			}

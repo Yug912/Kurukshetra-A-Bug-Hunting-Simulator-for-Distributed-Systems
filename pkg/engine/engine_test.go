@@ -48,7 +48,7 @@ func TestTimings(t *testing.T) {
 	}
 	var out []struct{ Phase string }
 	b, _ := os.ReadFile(p)
-	json.Unmarshal(b, &out)
+	_ = json.Unmarshal(b, &out)
 	if len(out) != 2 || out[0].Phase != "a" || out[1].Phase != "b" {
 		t.Fatal(string(b))
 	}

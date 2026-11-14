@@ -5,8 +5,10 @@ package engine
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -24,7 +26,7 @@ func needDocker(t *testing.T) {
 	if err != nil {
 		t.Skip(err)
 	}
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	if err := c.Ping(ctx); err != nil {
@@ -48,7 +50,7 @@ func loadSmoke(t *testing.T) scenario.Scenario {
 func assertNoLeaks(t *testing.T, scenario string, seed int64) {
 	t.Helper()
 	c, _ := docker.New()
-	defer c.Close()
+	defer func() { _ = c.Close() }()
 	left, err := c.ListRunPrefix(context.Background(), fmt.Sprintf("%s-%d-", scenario, seed))
 	if err != nil || len(left) != 0 {
 		t.Fatalf("leaked docker objects: %v %v", left, err)
@@ -172,4 +174,31 @@ func TestRunTCPMode(t *testing.T) {
 		t.Fatalf("tcp sends %d replies %d", tcpSends, replies)
 	}
 	assertNoLeaks(t, "engine-tcp-smoke", 1)
+}
+
+// TestNoGoroutineLeaks runs the engine three times and checks the goroutine
+// count returns to its starting level (idle HTTP connections are closed).
+func TestNoGoroutineLeaks(t *testing.T) {
+	needDocker(t)
+	sc := loadSmoke(t)
+	sc.DurationSteps, sc.QuietSteps = 300, 100
+	runtime.GC()
+	before := runtime.NumGoroutine()
+	for seed := int64(20); seed < 23; seed++ {
+		if _, err := (&Runner{}).Run(context.Background(), sc, seed, core.RunOptions{OutRoot: t.TempDir(), Quiet: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var after int
+	for i := 0; i < 50; i++ {
+		http.DefaultClient.CloseIdleConnections()
+		runtime.GC()
+		if after = runtime.NumGoroutine(); after <= before+2 {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	buf := make([]byte, 1<<20)
+	n := runtime.Stack(buf, true)
+	t.Fatalf("goroutines %d -> %d after 3 runs\n%s", before, after, buf[:n])
 }

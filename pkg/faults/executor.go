@@ -234,7 +234,7 @@ func (e *Executor) setClock(ctx context.Context, name string, n NodeRef, offset 
 		meta["error"] = "status " + strconv.Itoa(resp.StatusCode)
 	}
 	if resp != nil {
-		resp.Body.Close()
+		_ = resp.Body.Close()
 	}
 	if offset == 0 {
 		delete(e.skewed, name)

@@ -130,7 +130,7 @@ func Run(ctx context.Context, sc scenario.Scenario, opts Options) (Summary, erro
 	runners := make([]core.Runner, opts.Parallel)
 	for i := range runners {
 		if runners[i], err = core.NewRunner(opts.Runner); err != nil {
-			cw.close()
+			_ = cw.close()
 			return sum, err
 		}
 	}
@@ -180,7 +180,7 @@ func Run(ctx context.Context, sc scenario.Scenario, opts Options) (Summary, erro
 		if final {
 			end = "\n"
 		}
-		fmt.Fprintf(opts.Progress, "done %d/%d fail %d error %d rate %.0f/min eta %s   %s",
+		_, _ = fmt.Fprintf(opts.Progress, "done %d/%d fail %d error %d rate %.0f/min eta %s   %s",
 			sum.Done, sum.Total, sum.Fail, sum.Error, rate, eta, end)
 	}
 	for {
@@ -268,13 +268,13 @@ func openCSV(path string) (*csvWriter, error) {
 	}
 	st, err := f.Stat()
 	if err != nil {
-		f.Close()
+		_ = f.Close()
 		return nil, err
 	}
 	cw := &csvWriter{f: f, w: csv.NewWriter(f)}
 	if st.Size() == 0 {
 		if err := cw.w.Write(CSVHeader); err != nil {
-			f.Close()
+			_ = f.Close()
 			return nil, err
 		}
 	}

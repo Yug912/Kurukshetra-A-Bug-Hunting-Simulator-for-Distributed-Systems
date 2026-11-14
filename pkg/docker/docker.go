@@ -19,12 +19,12 @@ import (
 	"strings"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
 )
@@ -82,7 +82,7 @@ func (c *Controller) Ping(ctx context.Context) error {
 // with `make images`.
 func (c *Controller) EnsureImage(ctx context.Context, image string) error {
 	if _, err := c.cli.ImageInspect(ctx, image); err != nil {
-		if errdefs.IsNotFound(err) {
+		if cerrdefs.IsNotFound(err) {
 			return fmt.Errorf("image %s not found locally (run `make images`)", image)
 		}
 		return fmt.Errorf("inspect image %s: %w", image, err)
@@ -323,7 +323,7 @@ func (c *Controller) CopyLogs(ctx context.Context, id string, w io.Writer) error
 	if err != nil {
 		return fmt.Errorf("logs %s: %w", short(id), err)
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	info, err := c.cli.ContainerInspect(ctx, id)
 	if err == nil && info.Config != nil && info.Config.Tty {
 		_, err = io.Copy(w, rc)
@@ -369,7 +369,7 @@ func (c *Controller) cleanup(ctx context.Context, label string) (Removed, error)
 	}
 	for _, ct := range cs {
 		err := c.cli.ContainerRemove(ctx, ct.ID, container.RemoveOptions{Force: true, RemoveVolumes: true})
-		if err != nil && !errdefs.IsNotFound(err) {
+		if err != nil && !cerrdefs.IsNotFound(err) {
 			errs = append(errs, fmt.Errorf("remove container %s: %w", short(ct.ID), err))
 			continue
 		}
@@ -380,7 +380,7 @@ func (c *Controller) cleanup(ctx context.Context, label string) (Removed, error)
 		errs = append(errs, fmt.Errorf("list networks: %w", err))
 	}
 	for _, n := range ns {
-		if err := c.cli.NetworkRemove(ctx, n.ID); err != nil && !errdefs.IsNotFound(err) {
+		if err := c.cli.NetworkRemove(ctx, n.ID); err != nil && !cerrdefs.IsNotFound(err) {
 			errs = append(errs, fmt.Errorf("remove network %s: %w", n.Name, err))
 			continue
 		}
@@ -391,7 +391,7 @@ func (c *Controller) cleanup(ctx context.Context, label string) (Removed, error)
 		errs = append(errs, fmt.Errorf("list volumes: %w", err))
 	}
 	for _, v := range vs.Volumes {
-		if err := c.cli.VolumeRemove(ctx, v.Name, true); err != nil && !errdefs.IsNotFound(err) {
+		if err := c.cli.VolumeRemove(ctx, v.Name, true); err != nil && !cerrdefs.IsNotFound(err) {
 			errs = append(errs, fmt.Errorf("remove volume %s: %w", v.Name, err))
 			continue
 		}

@@ -51,16 +51,16 @@ Exit code: 0 PASS, 1 FAIL, 2 ERROR or UNKNOWN (of the replay).`,
 			}
 			out := cmd.OutOrStdout()
 			if rep, err := trace.ReadFile(filepath.Join(info.Dir, core.TraceFile)); err == nil {
-				fmt.Fprintln(out, replay.Compare(orig.Trace, rep))
+				_, _ = fmt.Fprintln(out, replay.Compare(orig.Trace, rep))
 			}
 			same := "reproduced"
 			if orig.Result.Verdict != info.Result.Verdict {
 				same = "NOT reproduced"
 			}
-			fmt.Fprintf(out, "verdict %s (original %s): %s\n", info.Result.Verdict, orig.Result.Verdict, same)
-			fmt.Fprintln(out, SummaryLine(orig.Meta.Seed, info))
+			_, _ = fmt.Fprintf(out, "verdict %s (original %s): %s\n", info.Result.Verdict, orig.Result.Verdict, same)
+			_, _ = fmt.Fprintln(out, SummaryLine(orig.Meta.Seed, info))
 			if runErr != nil && verbose() {
-				fmt.Fprintln(cmd.ErrOrStderr(), "error:", runErr)
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "error:", runErr)
 			}
 			os.Exit(ExitCode(info.Result.Verdict))
 			return nil
