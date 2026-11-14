@@ -1,0 +1,19 @@
+# kuru run examples/toykv-correct.yaml --seed 1   (needs Person A's engine and the kuru/toykv image)
+name: toykv-correct
+nodes: 3
+image: kuru/toykv
+workload:
+  type: kv
+  clients: 4
+  keys: 2
+  ops_per_sec: 40
+checkers: [linearizable-kv, durability]
+duration_steps: 3000
+faults:
+  drop: 0.01
+  delay_prob: 0.05
+  delay_steps: [1, 20]
+  partition_every: [200, 400]
+  partition_len: [150, 300]
+  crash_every: [500, 900]
+  crash_len: [100, 200]
