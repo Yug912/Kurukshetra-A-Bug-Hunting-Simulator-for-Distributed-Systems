@@ -184,7 +184,7 @@ func (t *HTTPTransport) call(c *http.Client, target raft.ServerAddress, path str
 	if err != nil {
 		return fmt.Errorf("transport: %s to %s: %w", path, target, err)
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 	rb, err := io.ReadAll(r.Body)
 	if err != nil {
 		return fmt.Errorf("transport: %s to %s: read: %w", path, target, err)

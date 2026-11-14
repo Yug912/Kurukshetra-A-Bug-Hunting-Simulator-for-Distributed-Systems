@@ -17,7 +17,7 @@ func serveFake(t *testing.T) (*HTTPTransport, *httptest.Server, *atomic.Int64) {
 	t.Helper()
 	recv := NewHTTPTransport("n2", nil)
 	srv := httptest.NewServer(recv)
-	t.Cleanup(func() { srv.Close(); recv.Close() })
+	t.Cleanup(func() { srv.Close(); _ = recv.Close() })
 	var count atomic.Int64
 	go func() {
 		for rpc := range recv.Consumer() {
@@ -86,7 +86,7 @@ func TestTransportDuplicateRequestHarmless(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		if resp.StatusCode != 200 {
 			t.Fatalf("attempt %d: status %d", i, resp.StatusCode)
 		}

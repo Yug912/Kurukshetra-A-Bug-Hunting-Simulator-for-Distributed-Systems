@@ -145,7 +145,7 @@ func Start(cfg Config) (*Node, error) {
 	}
 	clientLn, err := net.Listen("tcp", cfg.ClientListen)
 	if err != nil {
-		peerLn.Close()
+		_ = peerLn.Close()
 		return nil, fmt.Errorf("toykv: listen client %s: %w", cfg.ClientListen, err)
 	}
 	return StartWithListeners(cfg, peerLn, clientLn)
@@ -165,8 +165,8 @@ func StartWithListeners(cfg Config, peerLn, clientLn net.Listener) (*Node, error
 	// NewRaft returns without waiting for a leader, so the HTTP servers (and
 	// /kuru/health) are up right after it, before any election.
 	if err := n.startRaft(); err != nil {
-		peerLn.Close()
-		clientLn.Close()
+		_ = peerLn.Close()
+		_ = clientLn.Close()
 		n.Shutdown()
 		return nil, err
 	}
@@ -247,13 +247,13 @@ func (n *Node) Shutdown() {
 			n.logger.Printf("raft shutdown: %v", err)
 		}
 	}
-	n.trans.Close()
+	_ = n.trans.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	n.client.Shutdown(ctx)
+	_ = n.client.Shutdown(ctx)
 	n.wg.Wait()
 	if n.store != nil {
-		n.store.Close()
+		_ = n.store.Close()
 	}
 }
 
@@ -279,7 +279,7 @@ func (n *Node) routes() http.Handler {
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 func (n *Node) handleHealth(w http.ResponseWriter, _ *http.Request) {
