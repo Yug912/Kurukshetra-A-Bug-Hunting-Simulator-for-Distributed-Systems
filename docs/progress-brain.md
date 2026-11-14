@@ -2,7 +2,7 @@
 
 ## Status
 
-M1–M8 done; M9 (docs and demo) next. Person A's engine is not on `main` yet, so engine-dependent acceptance steps are pending. Work happens on branch `anushka` (Anushka's own branch, standing in for `feat/brain`).
+M1–M9 done on branch `anushka` (2026-11-14). Every step that runs without Person A's engine is done and green. The steps that need `kuru run`/`explore`/`replay` on `main` are listed under Next step.
 
 ## Milestones
 
@@ -17,7 +17,8 @@ M1–M8 done; M9 (docs and demo) next. Person A's engine is not on `main` yet, s
 - [x] **Checkpoint #2** (2026-11-14): `origin/main` is still at c8aa64f; all tests pass; pushed to `anushka`. No PR (no `gh`; the human wants work only on their branch). The explore → shrink → replay → serve loop waits for Person A's engine on `main`.
 - [x] **M8 Real-world target: etcd** (2026-11-14). See [targets/etcd/README.md](../targets/etcd/README.md). Bug: [Jepsen etcd/Consul 2014](https://aphyr.com/posts/316-call-me-maybe-etcd-and-consul) stale reads. `kuru/etcd:buggy` = etcd v2.3.8 (v2 default reads), built from pinned source with Go 1.10. `kuru/etcd:fixed` = etcd v3.5.17 (v3 reads are linearizable by default). `kuru-etcd-shim` handles stable peer URLs + local TCP forwarders to `PEERS`, `/kuru/health`, `/kuru/clock` → 404 and a reverse proxy. Workload `etcd-kv` (v2/v3 chosen by `/version`) is unit-tested against fake v2 and v3 servers, and both histories check PASS. Engine-free evidence: `go test -tags integration -run 'Etcd.*Partition' ./pkg/workload` (one follower cut off from its peers for 6 s with `docker network disconnect` while clients still reach it) gives **buggy FAIL 4/4** ("stale read of k0 on n3: got c1-29, expected c3-27") and **fixed PASS 4/4** (linearizable-kv and durability). Added `examples/real-etcd-{buggy,fixed}.yaml` (`mode: tcp`). The 200-run explore acceptance waits for Person A's engine with stream mode.
 - [x] **Toy KV bug flags, engine-free check** (2026-11-14). `go test -tags integration -run ToyKVBugFlags ./pkg/workload`: compose cluster, kv workload (6 clients, 80 ops/s), leader cut off from its peers for 6 s (`docker network disconnect` of the `peers` network). **correct: PASS/PASS (4 of 4 runs)**. **stale-read: FAIL** "stale read of k0 on n1: got c1-7, expected c1-8". **ack-before-commit** (30 keys, traffic stopped at heal): linearizable-kv FAIL plus **durability FAIL** "acknowledged write k16=c2-23 lost (and 4 more)". **lease-read** with a −1500 ms skew on the isolated leader: **FAIL** "stale read of k0 on n2: got c2-21, expected c1-35". The `kuru run` seeds 1–20 sweep still waits for Person A's engine.
-- [ ] M9 Docs and demo
+- [x] **M9 Docs and demo** (2026-11-14). [docs/brain.md](brain.md) covers the toy KV design, bug flags, workload semantics, both checkers and their limits, the shrinker, the viewer guide with keys, the serve API and a README snippet. [docs/demo.md](demo.md) is a 4-minute stage script, with exact output for the engine-free commands and a backup plan. `scripts/brain-demo-prep.sh` builds kuru, the viewer and the images and records the demo runs. Its `--no-docker` mode was run from a fresh copy of the repo and produced `runs/sample/42` and a shrunk `runs/fake-faults/1(-min)`. `scripts/brain-fakerun` writes run folders with any registered runner until `kuru run` exists. The engine-free commands in demo.md were run and match the document word for word.
+- **Final check** (2026-11-14): gofmt and vet are clean; `go test ./...`, `make test-integration` (incl. etcd buggy/fixed and all toy KV bug flags), `npm test` (19) and `npm run build` pass; golangci-lint is clean on owned paths; `git diff --name-only origin/main...HEAD` shows only owned paths.
 
 ## Decisions
 
@@ -58,4 +59,12 @@ M1–M8 done; M9 (docs and demo) next. Person A's engine is not on `main` yet, s
 
 ## Next step
 
-M9: write `docs/brain.md` (design, bug flags, workload semantics, checkers, shrinker, viewer guide, serve API, README snippet), `docs/demo.md` (4-minute script + backup plan) and `scripts/brain-demo-prep.sh`.
+Everything left needs Person A's engine (`kuru run`, `explore`, `replay`, stream mode) on `main`. When it lands:
+
+1. `git fetch && git rebase origin/main` on `anushka` and rerun every test.
+2. Checkpoint #1 sweep: `kuru run` each `examples/toykv-*.yaml` on seeds 1–20. Buggy scenarios must FAIL on some seeds and `toykv-correct` must PASS on all.
+3. Shrink a failing `toykv-stale-read` run with `--runner docker` and record the result.
+4. Checkpoint #2 loop: `kuru explore examples/toykv-stale-read.yaml --runs 50 --parallel 4` → `kuru shrink` → `kuru replay` → `kuru serve`; check the viewer against a real run, including the leader shown in the cluster box if the engine emits `note` events with `meta.leader`.
+5. M8 acceptance: `kuru explore examples/real-etcd-buggy.yaml --runs 200` FAILs on some seed, and `real-etcd-fixed` passes the same seeds (mode: tcp).
+6. Check that `summary.csv` lives at `<runs>/<scenario>/summary.csv` (adjust `serveSummary` if not).
+7. Run `scripts/brain-demo-prep.sh` and the demo end to end, then open the "Brain v0.1.0" PR. The humans paste the README snippet from docs/brain.md.
