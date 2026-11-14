@@ -27,3 +27,5 @@ func (p *Proxy) deliverTCP(m *Message) error                { return nil }
 func (p *Proxy) dropTCP(m *Message, meta map[string]string) {}
 func (p *Proxy) resetBlockedTCP()                           {}
 func (p *Proxy) closeTCP()                                  {}
+
+func (p *Proxy) deliverTCPAsync(m *Message, wg *sync.WaitGroup, onErr func(error)) {}

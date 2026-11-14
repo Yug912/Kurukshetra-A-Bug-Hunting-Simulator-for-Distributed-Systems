@@ -417,3 +417,54 @@ func PassThrough(ctx context.Context, p *Proxy) {
 		}
 	}
 }
+
+// DeliverAsync emits msg_deliver now (so trace order follows call order) and
+// forwards in a goroutine tracked by wg. Errors are reported to onErr (may be nil).
+func (p *Proxy) DeliverAsync(m *Message, wg *sync.WaitGroup, onErr func(error)) {
+	if m.conn != nil {
+		p.deliverTCPAsync(m, wg, onErr)
+		return
+	}
+	p.emit(trace.Event{Kind: trace.MsgDeliver, From: m.From, To: m.To, MsgID: m.ID, Size: m.Size, Meta: map[string]string{"path": m.Path}})
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		rp, err := p.forward(m)
+		if err != nil {
+			m.respond(reply{status: http.StatusBadGateway, body: []byte(`{"error":"proxy_forward"}`)})
+			if onErr != nil {
+				onErr(fmt.Errorf("deliver %s: %w", m.ID, err))
+			}
+			return
+		}
+		m.respond(rp)
+	}()
+}
+
+// DuplicateAsync emits msg_dup and both msg_deliver events now and performs the
+// two forwards in a goroutine tracked by wg (sender gets the first reply).
+// In tcp mode it is a plain delivery.
+func (p *Proxy) DuplicateAsync(m *Message, wg *sync.WaitGroup, onErr func(error)) {
+	if m.conn != nil {
+		p.deliverTCPAsync(m, wg, onErr)
+		return
+	}
+	meta := map[string]string{"path": m.Path}
+	p.emit(trace.Event{Kind: trace.MsgDup, From: m.From, To: m.To, MsgID: m.ID, Size: m.Size, Meta: meta})
+	p.emit(trace.Event{Kind: trace.MsgDeliver, From: m.From, To: m.To, MsgID: m.ID, Size: m.Size, Meta: meta})
+	p.emit(trace.Event{Kind: trace.MsgDeliver, From: m.From, To: m.To, MsgID: m.ID, Size: m.Size, Meta: map[string]string{"path": m.Path, "dup": "true"}})
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		rp, err := p.forward(m)
+		if err != nil {
+			m.respond(reply{status: http.StatusBadGateway, body: []byte(`{"error":"proxy_forward"}`)})
+		} else {
+			m.respond(rp)
+		}
+		_, err2 := p.forward(m)
+		if e := errors.Join(err, err2); e != nil && onErr != nil {
+			onErr(fmt.Errorf("duplicate %s: %w", m.ID, e))
+		}
+	}()
+}
