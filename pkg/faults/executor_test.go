@@ -20,10 +20,22 @@ func (f *fakeLinks) SetBlocked(b map[[2]string]bool) { f.blocked = b }
 
 type fakeCtr struct{ ops []string }
 
-func (f *fakeCtr) Kill(_ context.Context, id string) error    { f.ops = append(f.ops, "kill "+id); return nil }
-func (f *fakeCtr) Restart(_ context.Context, id string) error { f.ops = append(f.ops, "restart "+id); return nil }
-func (f *fakeCtr) Pause(_ context.Context, id string) error   { f.ops = append(f.ops, "pause "+id); return nil }
-func (f *fakeCtr) Unpause(_ context.Context, id string) error { f.ops = append(f.ops, "unpause "+id); return nil }
+func (f *fakeCtr) Kill(_ context.Context, id string) error {
+	f.ops = append(f.ops, "kill "+id)
+	return nil
+}
+func (f *fakeCtr) Restart(_ context.Context, id string) error {
+	f.ops = append(f.ops, "restart "+id)
+	return nil
+}
+func (f *fakeCtr) Pause(_ context.Context, id string) error {
+	f.ops = append(f.ops, "pause "+id)
+	return nil
+}
+func (f *fakeCtr) Unpause(_ context.Context, id string) error {
+	f.ops = append(f.ops, "unpause "+id)
+	return nil
+}
 
 type clockSrv struct {
 	mu      sync.Mutex
