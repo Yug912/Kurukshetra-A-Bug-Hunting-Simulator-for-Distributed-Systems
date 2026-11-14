@@ -1,0 +1,20 @@
+name: fake-smoke
+nodes: 3
+image: kuru/fake-node
+workload:
+  type: fake-put
+checkers: [fake-pass]
+duration_steps: 1500
+faults:
+  drop: 0.02
+  dup: 0.01
+  delay_prob: 0.05
+  delay_steps: [1, 20]
+  partition_every: [300, 500]
+  partition_len: [100, 200]
+  crash_every: [400, 700]
+  crash_len: [50, 150]
+  pause_every: [500, 800]
+  pause_len: [30, 60]
+  clock_skew_every: [400, 600]
+  clock_skew_ms: [-500, 500]
