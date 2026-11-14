@@ -2,7 +2,7 @@
 
 ## Status
 
-M1–M4 done and Checkpoint #1 pushed; M5 (shrinker) next. Person A's engine is not on `main` yet, so engine-dependent acceptance steps are pending. Work happens on branch `anushka` (Anushka's own branch, standing in for `feat/brain`).
+M1–M5 done; M6 (`kuru serve`) next. Person A's engine is not on `main` yet, so engine-dependent acceptance steps are pending. Work happens on branch `anushka` (Anushka's own branch, standing in for `feat/brain`).
 
 ## Milestones
 
@@ -11,7 +11,7 @@ M1–M4 done and Checkpoint #1 pushed; M5 (shrinker) next. Person A's engine is 
 - [x] **M3 Checkers** (2026-11-14). `kuru check <copy of testdata/sample-run> --checkers linearizable-kv,durability` → linearizable-kv FAIL, "stale read of k0 on n1: got c0-1, expected c1-1", bad ops 4,5, `linearizability.html` written; durability PASS; exit 1. Table tests cover valid concurrent, stale read, info write both ways, never-completed write, info read dropped, CAS ok / wrong expect / 409 ignored / info both ways, overlap blame, and durability lost / overwritten / concurrent overwrite / info overwrite / lost CAS / no final reads → UNKNOWN. A 5,000-op random valid history checks PASS in 7 ms, and FAIL after one corrupted read.
 - [x] **M4 Timeline viewer v1** (2026-11-14). `cd web/timeline && npm test` passes 12 Vitest tests: JSONL parser, message pairing (deliver/drop/delay/dup on the sample), op pairing + bad-op marking, partition/crash/pause intervals, skew markers, viewport math, and a 50,000-event synthetic run that builds its model in < 1 s and answers window queries in < 5 ms. `npm run build` passes (tsc + vite, 166 kB JS). Screenshot of `?run=sample` in [docs/timeline-sample.png](timeline-sample.png): partition band n1 | n2,n3 (120–600), hatched crash of n3 (700–800), red ✕ drops, the amber delayed request_vote, the dashed duplicate, and op 4/5 (`R k0→c0-1` on c2) outlined red. `?run=synthetic` renders 50k events, decimating to ≤ 1,500 plain + 600 special messages with a "zoom in" note.
 - [x] **Checkpoint #1** (2026-11-14): `origin/main` unchanged (c8aa64f), so no rebase was needed. All Go, integration and web tests pass. Pushed to `anushka`. No PR opened: `gh` is not installed and the human asked for work to stay on their branch. Added `examples/toykv-{correct,stale-read,lost-write,lease-clock}.yaml` (parse-tested). The seeds 1–20 sweep with `kuru run` waits for Person A's engine.
-- [ ] M5 Shrinker
+- [x] **M5 Shrinker** (2026-11-14). `go test -race ./pkg/shrink` passes: ddmin on synthetic predicates (single culprit, pair, adjacent pair, triple, none needed) and the fake-faults acceptance. `examples/fake-faults.yaml` seed 1 (8 faults) → `minimal: 2 faults (from 8) — crash n3 at step 195 for 1; partition n1 | n2,n3 at step 420 for 1 — 36 runs (message faults off)`, within the 60-run budget. `minimal.json`, `shrink.log` and `<run>-min` (verdict FAIL, `faults_from` → minimal.json) are written; parallel=4 gives the same result; budget exhaustion, non-FAIL refusal and cancellation are tested. `kuru shrink <dir>` is tested end to end through cobra. Shrinking a real toykv-stale-read run waits for Person A's engine.
 - [ ] M6 kuru serve
 - [ ] M7 Viewer v2
 - [ ] M8 Real-world target
@@ -35,6 +35,9 @@ M1–M4 done and Checkpoint #1 pushed; M5 (shrinker) next. Person A's engine is 
 13. **Web app.** React 18.3.1, Vite 5.4.21, Vitest 2.1.9, TypeScript 5.9.3: mature versions that run on CI's Node 20. No d3 (the step axis is one linear map). `npm run dev`/`build` first run `scripts/brain-copy-sample.sh` (pre-scripts), so `?run=sample` always works. `public/sample-run` is gitignored. Vite proxies `/api` to `kuru serve` at 127.0.0.1:7777 during `npm run dev`.
 14. **Timeline performance.** Messages and ops are sorted once. A window query is a binary search from `start - maxSpan`. When a window holds more than 1,500 plain messages (or 600 drops/delays/dups), they are decimated evenly with an on-screen note. `?run=synthetic` loads a generated 50k-event run for checking this by hand.
 
+15. **Shrinker.** Each round's candidates run as one batch (up to `--parallel` at once) and the first failing candidate *in order* wins, so the result does not depend on scheduling. Trials run in `<run parent>/.shrink-XXXX/trial-NNN` (same filesystem, removed afterwards). Cached and over-budget trials cost nothing and are logged. `<run-dir>-min` is the trial run that proved the minimal schedule fails (renamed into place, with `faults.json` = minimal and `meta.faults_from` → minimal.json); it is re-run only if it was never tried on its own. That beats a fresh re-run because it is guaranteed to FAIL. Phase 1 decides `NoMessageFaults` once, for all later trials. No randomness is needed, so `rng.StreamShrink` is unused.
+16. **`kuru shrink` runner choice.** `--runner` if given, else `meta.json`'s runner if it is registered (so a `fake-faults` run shrinks with `fake-faults`), else the global default `docker`.
+
 ## Contract change requests
 
 - None yet. (Note: `gofmt -l` reports `pkg/core/core.go` as not gofmt-clean with Go 1.26.11. It is a shared file, so I left it alone.)
@@ -45,4 +48,4 @@ M1–M4 done and Checkpoint #1 pushed; M5 (shrinker) next. Person A's engine is 
 
 ## Next step
 
-M5: implement `pkg/shrink` (phase 1 NoMessageFaults, phase 2 ddmin with cache/max-runs/parallel, phase 3 duration halving) and `cmd/kuru/shrink.go`; acceptance on fake-faults seed 1 → exactly 2 faults.
+M6: `cmd/kuru/serve.go`: `/api/runs`, `/api/runs/{scenario}/{run}/{file}` (allow-list, traversal and symlink protection), `/api/summary/{scenario}`, static web dir with SPA fallback and a missing-dir message, CORS for localhost:5173, Go tests.
