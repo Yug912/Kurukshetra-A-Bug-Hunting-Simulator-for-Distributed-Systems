@@ -22,7 +22,7 @@ const (
 	TraceFile    = "trace.jsonl"
 	HistoryFile  = "history.jsonl"
 	ResultFile   = "result.json"
-	FaultsFile   = "faults.json"   // the fault plan actually used
+	FaultsFile   = "faults.json" // the fault plan actually used
 	MetaFile     = "meta.json"
 	ScenarioFile = "scenario.yaml" // copy of the scenario
 	LogsDir      = "logs"          // logs/<node>.log
