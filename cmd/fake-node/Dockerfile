@@ -2,7 +2,7 @@
 FROM golang:1.26 AS build
 WORKDIR /src
 COPY cmd/fake-node/main.go .
-RUN CGO_ENABLED=0 go mod init fakenode && go build -o /fake-node .
+RUN go mod init fakenode && CGO_ENABLED=0 go build -o /fake-node .
 
 FROM gcr.io/distroless/static-debian12
 COPY --from=build /fake-node /fake-node
