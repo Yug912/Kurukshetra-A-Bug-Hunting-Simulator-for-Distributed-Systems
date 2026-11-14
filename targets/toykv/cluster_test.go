@@ -86,9 +86,9 @@ func do(t *testing.T, method, url string, body any) (int, map[string]any) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	out := map[string]any{}
-	json.NewDecoder(resp.Body).Decode(&out)
+	_ = json.NewDecoder(resp.Body).Decode(&out)
 	return resp.StatusCode, out
 }
 

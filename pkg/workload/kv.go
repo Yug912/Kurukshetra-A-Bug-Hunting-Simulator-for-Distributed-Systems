@@ -206,7 +206,7 @@ func (w *KV) send(ctx context.Context, req request) outcome {
 	if err != nil {
 		return outcome{err: err}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return outcome{code: resp.StatusCode, err: fmt.Errorf("read body: %w", err)}

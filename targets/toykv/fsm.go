@@ -92,7 +92,7 @@ func (f *FSM) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore implements raft.FSM.
 func (f *FSM) Restore(rc io.ReadCloser) error {
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	kv := map[string]string{}
 	if err := json.NewDecoder(rc).Decode(&kv); err != nil {
 		return fmt.Errorf("fsm: restore: %w", err)
@@ -108,7 +108,7 @@ type fsmSnapshot []byte
 // Persist implements raft.FSMSnapshot.
 func (s fsmSnapshot) Persist(sink raft.SnapshotSink) error {
 	if _, err := sink.Write(s); err != nil {
-		sink.Cancel()
+		_ = sink.Cancel()
 		return fmt.Errorf("fsm: persist: %w", err)
 	}
 	return sink.Close()

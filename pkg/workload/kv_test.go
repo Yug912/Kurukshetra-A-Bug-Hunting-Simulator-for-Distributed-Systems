@@ -51,7 +51,7 @@ func (f *fakeKV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		case x < 2*f.chaos/3:
 			w.WriteHeader(421)
-			w.Write([]byte(`{"error":"not_leader","leader":"n2"}`))
+			_, _ = w.Write([]byte(`{"error":"not_leader","leader":"n2"}`))
 			return
 		case x < f.chaos:
 			w.WriteHeader(503)
@@ -62,27 +62,27 @@ func (f *fakeKV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	var b struct{ Value, Expect string }
-	json.Unmarshal(body, &b)
+	_ = json.Unmarshal(body, &b)
 	if key, ok := strings.CutSuffix(rest, "/cas"); ok {
 		if f.kv[key] != b.Expect {
 			w.WriteHeader(409)
 			return
 		}
 		f.kv[key] = b.Value
-		w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"ok":true}`))
 		return
 	}
 	switch r.Method {
 	case http.MethodPut:
 		f.kv[rest] = b.Value
-		w.Write([]byte(`{"ok":true}`))
+		_, _ = w.Write([]byte(`{"ok":true}`))
 	case http.MethodGet:
 		v, ok := f.kv[rest]
 		if !ok {
 			w.WriteHeader(404)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"value": v})
+		_ = json.NewEncoder(w).Encode(map[string]string{"value": v})
 	}
 }
 
@@ -235,7 +235,7 @@ func TestRateLimit(t *testing.T) {
 
 func TestCancellationPrompt(t *testing.T) {
 	hang := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.ReadAll(r.Body)
+		_, _ = io.ReadAll(r.Body)
 		<-r.Context().Done()
 	}))
 	defer hang.Close()
@@ -244,7 +244,7 @@ func TestCancellationPrompt(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
-		w.Run(ctx, cluster(hang.URL), rand.New(rand.NewPCG(1, 1)), &counterClock{}, &rec)
+		_ = w.Run(ctx, cluster(hang.URL), rand.New(rand.NewPCG(1, 1)), &counterClock{}, &rec)
 		close(done)
 	}()
 	time.Sleep(100 * time.Millisecond)
@@ -279,7 +279,7 @@ func TestFinalReadsRetry(t *testing.T) {
 			w.WriteHeader(421)
 			return
 		}
-		w.Write([]byte(`{"value":"c0-1"}`))
+		_, _ = w.Write([]byte(`{"value":"c0-1"}`))
 	}))
 	defer srv.Close()
 	w := newWL(t, scenario.Workload{Clients: 2, Keys: 2, TimeoutMs: 500})
