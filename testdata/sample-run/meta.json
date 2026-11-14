@@ -1,0 +1,15 @@
+{
+  "scenario": "sample",
+  "seed": 42,
+  "nodes": [
+    "n1",
+    "n2",
+    "n3"
+  ],
+  "mode": "http",
+  "runner": "docker",
+  "started_at": "2026-01-01T00:00:00Z",
+  "duration_ms": 2000,
+  "steps": 1000,
+  "version": "sample"
+}

@@ -1,0 +1,14 @@
+{"index":0,"client":0,"type":"invoke","f":"write","key":"k0","value":"c0-1","node":"n1","step":10,"wall_ns":1767225600020000000}
+{"index":1,"client":0,"type":"ok","f":"write","key":"k0","value":"c0-1","node":"n1","step":20,"wall_ns":1767225600040001000}
+{"index":2,"client":1,"type":"invoke","f":"write","key":"k0","value":"c1-1","node":"n2","step":300,"wall_ns":1767225600600002000}
+{"index":3,"client":1,"type":"ok","f":"write","key":"k0","value":"c1-1","node":"n2","step":320,"wall_ns":1767225600640003000}
+{"index":4,"client":2,"type":"invoke","f":"read","key":"k0","node":"n1","step":400,"wall_ns":1767225600800004000}
+{"index":5,"client":2,"type":"ok","f":"read","key":"k0","value":"c0-1","node":"n1","step":410,"wall_ns":1767225600820005000}
+{"index":6,"client":0,"type":"invoke","f":"read","key":"k0","node":"n2","step":650,"wall_ns":1767225601300006000}
+{"index":7,"client":0,"type":"ok","f":"read","key":"k0","value":"c1-1","node":"n2","step":660,"wall_ns":1767225601320007000}
+{"index":8,"client":0,"type":"invoke","f":"read","key":"k0","node":"n1","step":900,"wall_ns":1767225601800008000,"final":true}
+{"index":9,"client":0,"type":"ok","f":"read","key":"k0","value":"c1-1","node":"n1","step":905,"wall_ns":1767225601810009000,"final":true}
+{"index":10,"client":0,"type":"invoke","f":"read","key":"k0","node":"n2","step":920,"wall_ns":1767225601840010000,"final":true}
+{"index":11,"client":0,"type":"ok","f":"read","key":"k0","value":"c1-1","node":"n2","step":925,"wall_ns":1767225601850011000,"final":true}
+{"index":12,"client":0,"type":"invoke","f":"read","key":"k0","node":"n3","step":940,"wall_ns":1767225601880012000,"final":true}
+{"index":13,"client":0,"type":"ok","f":"read","key":"k0","value":"c1-1","node":"n3","step":945,"wall_ns":1767225601890013000,"final":true}

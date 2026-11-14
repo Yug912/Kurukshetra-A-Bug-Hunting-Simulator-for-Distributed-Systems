@@ -1,0 +1,16 @@
+{
+  "seed": 42,
+  "scenario": "sample",
+  "verdict": "FAIL",
+  "checks": [
+    {
+      "checker": "linearizable-kv",
+      "verdict": "FAIL",
+      "reason": "stale read of k0 on n1",
+      "bad_ops": [
+        4,
+        5
+      ]
+    }
+  ]
+}

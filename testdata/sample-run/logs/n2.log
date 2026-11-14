@@ -1,0 +1,4 @@
+step 0 node n2 starting as follower
+step 200 n2 starting election term 2
+step 255 n2 became leader term 2
+step 320 n2 committed k0=c1-1

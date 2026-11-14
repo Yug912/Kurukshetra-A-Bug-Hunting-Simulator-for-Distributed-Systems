@@ -1,0 +1,4 @@
+step 0 node n3 starting as follower
+step 204 n3 voted for n2 term 2
+step 700 n3 killed
+step 800 n3 restarted, recovering from /data

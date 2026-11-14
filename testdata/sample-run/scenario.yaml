@@ -1,0 +1,17 @@
+name: sample
+nodes: 3
+image: kuru/toykv
+mode: http
+duration_steps: 1000
+step_ms: 2
+quiet_steps: 100
+workload:
+  type: kv
+  clients: 3
+  keys: 1
+faults:
+  partition_every: [100, 200]
+  partition_len: [300, 500]
+  crash_every: [500, 700]
+  crash_len: [50, 150]
+checkers: [linearizable-kv]

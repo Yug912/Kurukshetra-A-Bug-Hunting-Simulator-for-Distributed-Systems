@@ -1,0 +1,24 @@
+[
+  {
+    "step": 120,
+    "kind": "partition",
+    "groups": [
+      [
+        "n1"
+      ],
+      [
+        "n2",
+        "n3"
+      ]
+    ],
+    "duration_steps": 480
+  },
+  {
+    "step": 700,
+    "kind": "crash",
+    "nodes": [
+      "n3"
+    ],
+    "duration_steps": 100
+  }
+]
