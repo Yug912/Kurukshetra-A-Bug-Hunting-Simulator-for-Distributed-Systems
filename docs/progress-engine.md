@@ -2,7 +2,7 @@
 
 ## Status
 
-M1–M5 done (checkpoint #1 scope). Working on M6 (replay).
+M1–M6 done. Next: M7 (explorer + cleanup). Checkpoint #1 reached; not pushed (the humans push — see Decisions).
 
 ## Milestones
 
@@ -11,7 +11,7 @@ M1–M5 done (checkpoint #1 scope). Working on M6 (replay).
 - [x] **M3 Scheduler** (2026-11-14) — unit tests with a fake bus (`-race`): `Decide` identical across 20 runs for 900 IDs; identical ops across 20 shuffled arrival orders; delay released on the exact step; blocked → partition drop; `NoMessageFaults` delivers all; faults fire/heal sorted.
 - [x] **M4 Fault plan + executor** (2026-11-14) — `Plan` identical for same seed, differs across seeds, `Validate` passes for seeds 1–100 at n = 1, 2, 3, 5, 7 (incl. dense configs that force no-overlap pushes and minority skips); toggling one fault type does not reshuffle others; executor tested with fake proxy/docker/HTTP (404 → `unsupported=true`, HealAll idempotent).
 - [x] **M5 Engine + `kuru run`** (2026-11-14) — `kuru run examples/fake-smoke.yaml --seed 1` → `seed=1 verdict=PASS checks=fake-pass:PASS faults=9 dir=runs/fake-smoke/1`; trace has partitions (incl. bridge), crashes/restarts, pause/resume, clock skews, drops, dups, delays; 0 undecided messages. `scripts/engine-determinism.sh` → faults.json identical, 99.59% identical decisions on 488 shared IDs. Ctrl-C mid-run → verdict ERROR, exit 2, 0 containers/networks/volumes left. Integration tests: fake-smoke PASS + all files, cancel cleans up, missing image → ERROR result + cleanup.
-- [ ] M6 Replay
+- [x] **M6 Replay** (2026-11-14) — `scripts/engine-replay-check.sh` (run + replay of fake-smoke seeds 1–5), 8 rounds = 40 pairs: all ≥ 95% (lowest 96.2%, 35/40 at 99.6–100%), fault events 17/17…21/21 exact, verdict reproduced every time. Unit tests: matcher cases (on time, early hold, startup counterpart, late-nearest, skip, extra), bounded freeze, no wait on blocked sender, forced decisions/timing, guide building, fidelity scoring, NextDir. Integration: `TestReplayFidelity` (seed 3 ≥ 95%, `replay_of`, `replay-fidelity.json`). Determinism re-checked: fault plan identical, seed-driven decisions 100% (seeds 1–3), all decisions 95.7–100%.
 - [ ] M7 Explorer + cleanup
 - [ ] M8 Stream mode (tcp)
 - [ ] M9 Hardening, performance, docs
@@ -32,6 +32,12 @@ M1–M5 done (checkpoint #1 scope). Working on M6 (replay).
 - Non-fatal errors (deliveries to crashed/paused nodes) go to `logs/engine.log` only; the console shows a count.
 - Phase timings go to `logs/engine-timings.json` (meta has no field for them).
 - `docker/go-connections/nat` and `docker/docker/errdefs`, `pkg/stdcopy` are used directly; they are already in go.mod (as indirect deps), so go.mod is untouched.
+- Replay design (details in docs/engine.md): matching by link + timing instead of a fixed counter; clock pauses for late recorded messages (≤ 30 ticks per step, not 5 as the prompt suggests: fake-node timers drift by up to one 25-step ping period after restarts/pauses, and 5 ticks cannot re-lock the clock); early messages held ≤ 50 steps; never wait for a sender with a held message (synchronous senders would deadlock the clock); first-message startup counterparts get `-sx<k>` IDs and pass through like the original's startup traffic; unmatched messages get `-x<k>` IDs and the PRNG decision.
+- Startup traffic has its own IDs `<from>-<to>-s<n>`, set when the proxy is created (before containers boot); run-phase IDs start at 1 when the clock starts.
+- `run_start` meta records `no_message_faults=true` so a replay of a shrunk run keeps message faults off.
+- Determinism metric: `engine-tracediff` reports seed-driven decisions (threshold, expected 100%) and all decisions (informational). Messages cut by a partition or decided in the quiet period depend on node timers (when the message arrives relative to a fixed partition step), which the determinism model explicitly does not control; the prompt's "≥ 99% identical decisions" holds for seed-driven decisions (100%), overall is 95–100%.
+- Port allocation verifies a port is free on both 127.0.0.1 and 0.0.0.0, and the proxy reserves its ports; on macOS a Docker/Colima port forward on 127.0.0.1:P silently shadows the proxy's 0.0.0.0:P (seen once: a whole link bypassed the proxy). The engine warns about links with no run-phase traffic.
+- `pkg/replay` holds the pure parts (guide, fidelity, decision diff); the engine imports it, never the reverse.
 - `scripts/engine-tracediff/` is a small Go command used by `scripts/engine-determinism.sh` (no jq/python dependency).
 
 ## Contract change requests
@@ -41,9 +47,9 @@ M1–M5 done (checkpoint #1 scope). Working on M6 (replay).
 
 ## Known issues
 
-- Message IDs count per link from the start of the run, including startup traffic, so the same ID can refer to different payloads in two runs if startup took a different number of messages. Decisions per ID are still identical; this only matters for replay fidelity.
 - Messages parked after the last quiet step (between final reads and proxy close) get no decision event.
+- Replay fidelity on targets with randomized timers (Raft election timeouts) is expected to be lower than on fake-node; it is reported, not guaranteed.
 
 ## Next step
 
-M6: implement `pkg/replay` (guide from trace, next replay dir, fidelity), wire `prepareReplay`/`scoreReplay` in `pkg/engine/replay_hooks.go`, the replay admission/order logic in `pkg/scheduler/replay.go`, and `cmd/kuru/replay.go`.
+M7: `pkg/explore` (seed list, worker pool over `core.NewRunner`, delete passing dirs unless --keep-passing, summary.csv via one writer goroutine, live progress line, Ctrl-C drain, failing-seed hints) + `cmd/kuru/explore.go` and `cmd/kuru/cleanup.go` (CleanupAll, print removed).

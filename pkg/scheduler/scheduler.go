@@ -136,6 +136,15 @@ func (s *Scheduler) onErr(err error) {
 
 // tick advances one step; the order of work inside is part of the determinism contract.
 func (s *Scheduler) tick(ctx context.Context) {
+	var arrived []*netproxy.Message
+	if s.replay != nil {
+		// Replay: stage arrivals first; freeze the clock while messages recorded
+		// for the next step are still missing (bounded by WaitSteps ticks).
+		s.replay.stage(s.collect())
+		if s.replay.freeze(s.Step() + 1) {
+			return
+		}
+	}
 	now := s.clock.advance()
 	if !s.quiet {
 		s.fireFaults(ctx, now)
@@ -151,10 +160,11 @@ func (s *Scheduler) tick(ctx context.Context) {
 		}
 	}
 	s.delayed = keep
-	// Collect new arrivals, sorted by ID.
-	arrived := s.collect()
+	// Collect new arrivals, sorted by ID (replay: in recorded order).
 	if s.replay != nil {
-		arrived = s.replay.admit(now, arrived)
+		arrived = s.replay.admit(now)
+	} else {
+		arrived = s.collect()
 	}
 	for _, m := range arrived {
 		if d, ok := s.decide(now, m); ok {
@@ -213,6 +223,8 @@ func (s *Scheduler) decide(now int64, m *netproxy.Message) (delayed, bool) {
 	switch {
 	case s.quiet || s.opts.NoMessageFaults:
 		d = Decision{Fate: Deliver}
+	case s.replay != nil && isStartupCounterpart(m.ID):
+		d = Decision{Fate: Deliver}
 	case s.replay != nil && s.replay.has(m.ID):
 		d = s.replay.decision(m.ID)
 	default:
@@ -224,7 +236,7 @@ func (s *Scheduler) decide(now int64, m *netproxy.Message) (delayed, bool) {
 	switch d.Fate {
 	case Drop:
 		s.stats.Dropped++
-		s.bus.Drop(m, "")
+		s.bus.Drop(m, d.Reason)
 		return delayed{}, false
 	case Delay:
 		s.stats.Delayed++

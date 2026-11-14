@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ var FinalReadTimeout = 60 * time.Second
 
 func init() {
 	core.RegisterRunner(RunnerName, func() (core.Runner, error) { return &Runner{}, nil })
+	netproxy.PortReserver = docker.ReservePort
 }
 
 // Runner implements core.Runner on Docker.
@@ -193,8 +195,11 @@ func (x *run) execute(ctx context.Context) (err error) {
 		return err
 	}
 	x.clock = scheduler.NewClock()
-	x.tw.Append(trace.Event{Step: 0, Kind: trace.RunStart, Meta: map[string]string{
-		"seed": fmt.Sprint(x.seed), "scenario": x.sc.Name, "mode": x.sc.Mode}})
+	startMeta := map[string]string{"seed": fmt.Sprint(x.seed), "scenario": x.sc.Name, "mode": x.sc.Mode}
+	if x.opts.NoMessageFaults {
+		startMeta["no_message_faults"] = "true"
+	}
+	x.tw.Append(trace.Event{Step: 0, Kind: trace.RunStart, Meta: startMeta})
 
 	defer func() {
 		cctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -214,6 +219,10 @@ func (x *run) execute(ctx context.Context) (err error) {
 	x.sched = scheduler.New(x.sc, x.src, x.proxy, x.tw, x.exec, x.plan, scheduler.Options{
 		NoMessageFaults: x.opts.NoMessageFaults, Replay: x.guide, Clock: x.clock, OnError: x.onError,
 	})
+	if x.guide != nil {
+		x.proxy.SetNamer(x.sched.ReplayNamer())
+	}
+	x.proxy.SetIDPrefix("") // startup traffic ends: run-phase IDs start at <from>-<to>-1
 	wctx, wcancel := context.WithCancel(ctx)
 	var wwg sync.WaitGroup
 	wwg.Add(1)
@@ -250,12 +259,50 @@ func (x *run) execute(ctx context.Context) (err error) {
 	st := x.sched.Stats()
 	x.logln("messages: %d delivered, %d dropped, %d duplicated, %d delayed, %d cut by partitions",
 		st.Delivered, st.Dropped, st.Duplicated, st.Delayed, st.Partitioned)
+	if quiet := x.silentLinks(); len(quiet) > 0 {
+		x.logln("warn: no run-phase messages on links %v (check the target's PEERS handling and proxy reachability)", quiet)
+	}
 	x.errMu.Lock()
 	if x.errCnt > 0 {
 		x.logln("%d delivery/fault errors (expected around crashes and pauses; see logs/engine.log)", x.errCnt)
 	}
 	x.errMu.Unlock()
 	return nil
+}
+
+// silentLinks lists node pairs with no run-phase message while other links
+// carried traffic — the usual sign of peer traffic bypassing the proxy. (Some
+// targets legitimately never use a link, so this is only a warning.)
+func (x *run) silentLinks() []string {
+	if err := x.tw.Flush(); err != nil {
+		return nil
+	}
+	evs, err := trace.ReadFile(filepath.Join(x.dir, core.TraceFile))
+	if err != nil {
+		return nil
+	}
+	run := map[string]bool{}
+	for _, e := range evs {
+		if e.Kind != trace.MsgSend {
+			continue
+		}
+		if i := strings.LastIndexByte(e.MsgID, '-'); i >= 0 && strings.HasPrefix(e.MsgID[i+1:], "s") {
+			continue
+		}
+		run[e.From+"->"+e.To] = true
+	}
+	if len(run) == 0 {
+		return nil
+	}
+	var out []string
+	for _, a := range x.meta.Nodes {
+		for _, b := range x.meta.Nodes {
+			if a != b && !run[a+"->"+b] {
+				out = append(out, a+"->"+b)
+			}
+		}
+	}
+	return out
 }
 
 // finalReads keeps the clock ticking (quiet: deliver everything) while the
@@ -338,6 +385,9 @@ func (x *run) startCluster(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	// Everything nodes send before the run proper (boot, elections, health
+	// wait) is startup traffic with its own IDs "<from>-<to>-s<n>".
+	x.proxy.SetIDPrefix("s")
 
 	x.timing.begin("start_containers")
 	x.logln("starting %d x %s (run %s)", x.sc.Nodes, x.sc.Image, x.runID)

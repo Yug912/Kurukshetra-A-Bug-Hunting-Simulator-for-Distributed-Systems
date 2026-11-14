@@ -123,3 +123,27 @@ func TestRunMissingImage(t *testing.T) {
 	}
 	assertNoLeaks(t, "fake-smoke", 1)
 }
+
+func TestReplayFidelity(t *testing.T) {
+	needDocker(t)
+	root := t.TempDir()
+	sc := loadSmoke(t)
+	orig, err := (&Runner{}).Run(context.Background(), sc, 3, core.RunOptions{OutRoot: root, Quiet: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep, err := (&Runner{}).Run(context.Background(), sc, 3, core.RunOptions{ReplayFrom: orig.Dir, Quiet: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rep.Dir != orig.Dir+"-replay-1" || rep.Meta.ReplayOf != orig.Dir || rep.Result.Fidelity == nil {
+		t.Fatalf("%+v", rep)
+	}
+	if *rep.Result.Fidelity < 0.95 {
+		t.Fatalf("fidelity %.3f < 0.95", *rep.Result.Fidelity)
+	}
+	if _, err := os.Stat(filepath.Join(rep.Dir, "logs", "replay-fidelity.json")); err != nil {
+		t.Fatal(err)
+	}
+	assertNoLeaks(t, "fake-smoke", 3)
+}

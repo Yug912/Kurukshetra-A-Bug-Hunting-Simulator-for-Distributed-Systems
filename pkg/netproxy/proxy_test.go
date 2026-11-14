@@ -105,6 +105,10 @@ func TestSequentialIDsAndIntactDelivery(t *testing.T) {
 		}
 	}
 	send(t, p, "n2", "n1", "/peer/vote", "x")
+	p.SetIDPrefix("s")
+	send(t, p, "n1", "n2", "/peer/append", "s")
+	p.SetIDPrefix("")
+	send(t, p, "n1", "n2", "/peer/append", "after")
 	cancel()
 	<-done
 	tw.Close()
@@ -118,7 +122,7 @@ func TestSequentialIDsAndIntactDelivery(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(ids, ",") != "n1-n2-1,n1-n2-2,n1-n2-3,n2-n1-1" {
+	if strings.Join(ids, ",") != "n1-n2-1,n1-n2-2,n1-n2-3,n2-n1-1,n1-n2-s1,n1-n2-4" {
 		t.Fatalf("ids %v", ids)
 	}
 	if nodes["n2"].hits[0] != "/peer/append|n1|b1|c1" {

@@ -1,4 +1,4 @@
-package engine
+package replay
 
 import (
 	"sort"
@@ -50,10 +50,25 @@ func Decisions(evs []trace.Event) map[string]MessageDecision {
 }
 
 // DecisionDiff compares the decisions of two traces on the message IDs present in both.
+//
+// A mismatch is timing-dependent when either side was cut by a partition or
+// was decided at or after QuietFrom (the quiet period delivers everything):
+// whether a message lands inside such a window depends on the node's own timers,
+// which the engine does not control. All other decisions come only from the
+// seed and the message ID, so Seeded/SeededSame should be equal.
 type DecisionDiff struct {
-	Shared, Same int
-	OnlyA, OnlyB int
-	Mismatches   []string // first few "id: a vs b"
+	Shared, Same       int
+	OnlyA, OnlyB       int
+	Seeded, SeededSame int      // shared IDs whose decisions were not timing-dependent
+	Mismatches         []string // first few "id: a vs b"
+}
+
+// SeededPercent returns SeededSame/Seeded as a percentage (100 if none).
+func (d DecisionDiff) SeededPercent() float64 {
+	if d.Seeded == 0 {
+		return 100
+	}
+	return 100 * float64(d.SeededSame) / float64(d.Seeded)
 }
 
 // Percent returns Same/Shared as a percentage (100 if nothing is shared).
@@ -65,7 +80,8 @@ func (d DecisionDiff) Percent() float64 {
 }
 
 // CompareDecisions diffs the per-message decisions of two traces.
-func CompareDecisions(a, b []trace.Event) DecisionDiff {
+// quietFrom is the first step of the quiet period (0 = none).
+func CompareDecisions(a, b []trace.Event, quietFrom int64) DecisionDiff {
 	da, db := Decisions(a), Decisions(b)
 	var d DecisionDiff
 	ids := make([]string, 0, len(da))
@@ -80,10 +96,19 @@ func CompareDecisions(a, b []trace.Event) DecisionDiff {
 			continue
 		}
 		d.Shared++
-		if da[id].Kind == y.Kind {
+		x := da[id]
+		timing := x.Kind == "drop:partition" || y.Kind == "drop:partition" ||
+			quietFrom > 0 && (x.Step >= quietFrom || y.Step >= quietFrom)
+		if !timing {
+			d.Seeded++
+		}
+		if x.Kind == y.Kind {
 			d.Same++
+			if !timing {
+				d.SeededSame++
+			}
 		} else if len(d.Mismatches) < 10 {
-			d.Mismatches = append(d.Mismatches, id+": "+da[id].Kind+" vs "+y.Kind)
+			d.Mismatches = append(d.Mismatches, id+": "+x.Kind+" vs "+y.Kind)
 		}
 	}
 	for id := range db {

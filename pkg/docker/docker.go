@@ -164,16 +164,6 @@ func isPortConflict(err error) bool {
 	return strings.Contains(m, "port is already allocated") || strings.Contains(m, "address already in use")
 }
 
-// FreePort returns a currently free TCP port on 127.0.0.1.
-func FreePort() (int, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, err
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
-}
-
 func (c *Controller) startOnce(ctx context.Context, spec NodeSpec, labels map[string]string) (Node, error) {
 	hp, err := FreePort()
 	if err != nil {

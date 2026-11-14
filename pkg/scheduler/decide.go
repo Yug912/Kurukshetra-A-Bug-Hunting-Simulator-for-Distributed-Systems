@@ -16,10 +16,12 @@ const (
 	Delay     Fate = "delay"
 )
 
-// Decision is the fate of one message, plus the delay length for Delay.
+// Decision is the fate of one message, plus the delay length for Delay and the
+// drop reason (replay only; empty for PRNG drops).
 type Decision struct {
-	Fate  Fate
-	Steps int64
+	Fate   Fate
+	Steps  int64
+	Reason string
 }
 
 // Decide returns the fate of message id. It is a pure function of the seed,

@@ -79,7 +79,9 @@ type Proxy struct {
 	host     string
 	targets  map[string]string // node -> PeerHostAddr
 	ports    map[link]int
-	counters map[link]int
+	counters map[string]int // "<from>-<to>-<prefix>" -> last n
+	prefix   string
+	namer    Namer
 	blocked  map[[2]string]bool
 
 	incoming  chan *Message
@@ -109,7 +111,7 @@ func New(nodes []string, targets map[string]string, clock core.StepClock, tw *tr
 		clock: clock, tw: tw, mode: "http", host: host,
 		targets:  map[string]string{},
 		ports:    map[link]int{},
-		counters: map[link]int{},
+		counters: map[string]int{},
 		blocked:  map[[2]string]bool{},
 		incoming: make(chan *Message, 1<<16),
 		fwd:      &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{MaxIdleConnsPerHost: 16, IdleConnTimeout: 30 * time.Second}},
@@ -131,7 +133,7 @@ func New(nodes []string, targets map[string]string, clock core.StepClock, tw *tr
 			if from == to {
 				continue
 			}
-			l, err := net.Listen("tcp", "0.0.0.0:0")
+			l, err := listenUnshadowed()
 			if err != nil {
 				p.Close()
 				return nil, fmt.Errorf("proxy listen %s->%s: %w", from, to, err)
@@ -154,6 +156,41 @@ func New(nodes []string, targets map[string]string, clock core.StepClock, tw *tr
 		}
 	}
 	return p, nil
+}
+
+// listenUnshadowed listens on 0.0.0.0:<random> and makes sure nothing else
+// holds 127.0.0.1 on the same port: on macOS such a socket (e.g. a Docker port
+// forward) would silently take the loopback traffic meant for the proxy.
+func listenUnshadowed() (net.Listener, error) {
+	var lastErr error
+	for i := 0; i < 50; i++ {
+		l, err := net.Listen("tcp", "0.0.0.0:0")
+		if err != nil {
+			return nil, err
+		}
+		port := l.Addr().(*net.TCPAddr).Port
+		probe, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		if err == nil {
+			probe.Close()
+			reservePort(port)
+			return l, nil
+		}
+		lastErr = err
+		l.Close()
+	}
+	return nil, fmt.Errorf("no unshadowed port: %w", lastErr)
+}
+
+// Ports returns every port the proxy listens on.
+func (p *Proxy) Ports() []int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	out := make([]int, 0, len(p.ports))
+	for _, port := range p.ports {
+		out = append(out, port)
+	}
+	sort.Ints(out)
+	return out
 }
 
 // SetHost changes the host name nodes use to reach the proxy (default
@@ -195,11 +232,40 @@ func (p *Proxy) PeerEnv(node string) string {
 // Incoming delivers every parked message to the scheduler.
 func (p *Proxy) Incoming() <-chan *Message { return p.incoming }
 
+// SetIDPrefix sets a prefix for the counter part of new message IDs, with its
+// own counters: with prefix "s" IDs are "<from>-<to>-s<n>". The engine uses it
+// for startup traffic so that the IDs of the run proper ("<from>-<to>-<n>")
+// always start at 1 when the logical clock starts, however long startup took.
+func (p *Proxy) SetIDPrefix(prefix string) {
+	p.mu.Lock()
+	p.prefix = prefix
+	p.mu.Unlock()
+}
+
+// Namer names run-phase messages during a replay. It is called (under the
+// proxy's lock; it must not call the proxy) for every message that arrives
+// while no ID prefix is set, with the current step, and returns the ID to use;
+// "" falls back to the normal "<from>-<to>-<n>" counter.
+type Namer func(from, to string, arrivedStep int64) string
+
+// SetNamer installs a Namer (replay only).
+func (p *Proxy) SetNamer(n Namer) {
+	p.mu.Lock()
+	p.namer = n
+	p.mu.Unlock()
+}
+
 func (p *Proxy) nextID(lk link) string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.counters[lk]++
-	return fmt.Sprintf("%s-%s-%d", lk.from, lk.to, p.counters[lk])
+	if p.prefix == "" && p.namer != nil {
+		if id := p.namer(lk.from, lk.to, p.step()); id != "" {
+			return id
+		}
+	}
+	base := lk.from + "-" + lk.to + "-" + p.prefix
+	p.counters[base]++
+	return base + strconv.Itoa(p.counters[base])
 }
 
 func (p *Proxy) emit(e trace.Event) {
