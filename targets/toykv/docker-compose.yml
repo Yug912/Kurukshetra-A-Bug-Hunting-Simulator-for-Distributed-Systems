@@ -1,0 +1,32 @@
+# Three toy KV nodes wired directly to each other (no Kurukshetra proxy).
+# Build first: docker build -t kuru/toykv -f targets/toykv/Dockerfile .
+# Then: docker compose -f targets/toykv/docker-compose.yml up -d
+x-node: &node
+  image: kuru/toykv
+  environment: &env
+    PEER_LISTEN: ":7000"
+    CLIENT_LISTEN: ":8080"
+    DATA_DIR: /data
+    LOG_LEVEL: INFO
+services:
+  n1:
+    <<: *node
+    environment:
+      <<: *env
+      NODE_ID: n1
+      PEERS: n2=n2:7000,n3=n3:7000
+    ports: ["18081:8080"]
+  n2:
+    <<: *node
+    environment:
+      <<: *env
+      NODE_ID: n2
+      PEERS: n1=n1:7000,n3=n3:7000
+    ports: ["18082:8080"]
+  n3:
+    <<: *node
+    environment:
+      <<: *env
+      NODE_ID: n3
+      PEERS: n1=n1:7000,n2=n2:7000
+    ports: ["18083:8080"]
