@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"kurukshetra/pkg/core"
+	"kurukshetra/pkg/scenario"
 )
 
 // copyTree copies src into a new temp dir and returns it (testdata is never modified).
@@ -78,5 +79,26 @@ func TestCheckCommandExitCodes(t *testing.T) {
 	}
 	if _, err := runCheck(&out, t.TempDir(), nil); err == nil {
 		t.Fatal("empty dir must error")
+	}
+}
+
+func TestToyKVExamplesParse(t *testing.T) {
+	want := map[string]string{
+		"toykv-correct":     "",
+		"toykv-stale-read":  "BUG_STALE_READ",
+		"toykv-lost-write":  "BUG_ACK_BEFORE_COMMIT",
+		"toykv-lease-clock": "BUG_LEASE_READ",
+	}
+	for name, flag := range want {
+		sc, err := scenario.Load(filepath.Join("..", "..", "examples", name+".yaml"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sc.Name != name || sc.Image != "kuru/toykv" || sc.Workload.Type != "kv" || len(sc.Checkers) != 2 {
+			t.Fatalf("%s: %+v", name, sc)
+		}
+		if flag == "" && len(sc.Env) != 0 || flag != "" && sc.Env[flag] != "1" {
+			t.Fatalf("%s env %v", name, sc.Env)
+		}
 	}
 }
