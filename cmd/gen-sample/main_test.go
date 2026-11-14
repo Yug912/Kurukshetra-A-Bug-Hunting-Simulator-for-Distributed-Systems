@@ -19,18 +19,24 @@ func TestGenerateMatchesCommitted(t *testing.T) {
 		t.Fatal(err)
 	}
 	committed := filepath.Join("..", "..", "testdata", "sample-run")
-	filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+	walkErr := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 		if d.IsDir() {
 			return nil
 		}
 		rel, _ := filepath.Rel(dir, p)
 		a, _ := os.ReadFile(p)
-		b, err := os.ReadFile(filepath.Join(committed, rel))
-		if err != nil || string(a) != string(b) {
+		b, rerr := os.ReadFile(filepath.Join(committed, rel))
+		if rerr != nil || string(a) != string(b) {
 			t.Errorf("%s differs from committed sample (run make sample)", rel)
 		}
 		return nil
 	})
+	if walkErr != nil {
+		t.Fatal(walkErr)
+	}
 	evs, err := trace.ReadFile(filepath.Join(dir, core.TraceFile))
 	if err != nil || len(evs) < 50 || len(evs) > 70 {
 		t.Fatalf("trace: %d events, %v", len(evs), err)

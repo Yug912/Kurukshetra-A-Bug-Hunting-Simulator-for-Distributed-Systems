@@ -63,7 +63,9 @@ func TestValidationErrors(t *testing.T) {
 
 func TestLoadAndNodeNames(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "s.yaml")
-	os.WriteFile(p, []byte("name: ok-1\nimage: img\nnodes: 5\nfaults:\n  clock_skew_ms: [-500, 500]\n  clock_skew_every: [10, 20]\n"), 0o644)
+	if err := os.WriteFile(p, []byte("name: ok-1\nimage: img\nnodes: 5\nfaults:\n  clock_skew_ms: [-500, 500]\n  clock_skew_every: [10, 20]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	sc, err := Load(p)
 	if err != nil {
 		t.Fatal(err)

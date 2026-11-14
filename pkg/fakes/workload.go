@@ -56,7 +56,7 @@ func (w *FakePut) do(ctx context.Context, method, url string, body []byte) (int,
 	if err != nil {
 		return 0, nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	b, err := io.ReadAll(resp.Body)
 	return resp.StatusCode, b, err
 }
@@ -119,8 +119,12 @@ func (w *FakePut) FinalReads(ctx context.Context, cl core.Cluster, clock core.St
 				op.Error = err.Error()
 			} else if code == 200 {
 				var v struct{ Value string }
-				json.Unmarshal(b, &v)
-				op.Value = v.Value
+				if jerr := json.Unmarshal(b, &v); jerr != nil {
+					// Unreadable reply: the outcome is unknown.
+					op.Type, op.Error = history.Info, "bad reply: "+jerr.Error()
+				} else {
+					op.Value = v.Value
+				}
 			} else if op.Type != history.OK {
 				op.Error = fmt.Sprintf("http %d", code)
 			}

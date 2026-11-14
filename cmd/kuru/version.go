@@ -14,7 +14,7 @@ func init() {
 		Use:   "version",
 		Short: "Print the kuru version",
 		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Fprintf(cmd.OutOrStdout(), "kuru %s (%s)\n", core.Version, runtime.Version())
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "kuru %s (%s)\n", core.Version, runtime.Version())
 		},
 	})
 }

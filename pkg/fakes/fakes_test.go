@@ -84,7 +84,9 @@ func TestFaultsRunnerFromFile(t *testing.T) {
 	run := FaultsRunner{}
 	write := func(fs []core.Fault) string {
 		p := filepath.Join(t.TempDir(), "faults.json")
-		core.WriteFaults(p, fs)
+		if err := core.WriteFaults(p, fs); err != nil {
+			t.Fatal(err)
+		}
 		return p
 	}
 	part := core.Fault{Step: 10, Kind: trace.Partition, Groups: [][]string{{"n1"}, {"n2", "n3"}}, DurationSteps: 50}
@@ -142,17 +144,17 @@ func TestFakePutWorkload(t *testing.T) {
 		switch r.Method {
 		case http.MethodPut:
 			var b struct{ Value string }
-			json.NewDecoder(r.Body).Decode(&b)
+			_ = json.NewDecoder(r.Body).Decode(&b)
 			kv[key] = b.Value
-			w.Write([]byte(`{"ok":true}`))
+			_, _ = w.Write([]byte(`{"ok":true}`))
 		case http.MethodGet:
 			v, ok := kv[key]
 			if !ok {
 				w.WriteHeader(404)
-				w.Write([]byte(`{"error":"not_found"}`))
+				_, _ = w.Write([]byte(`{"error":"not_found"}`))
 				return
 			}
-			json.NewEncoder(w).Encode(map[string]string{"value": v})
+			_ = json.NewEncoder(w).Encode(map[string]string{"value": v})
 		}
 	}))
 	defer srv.Close()

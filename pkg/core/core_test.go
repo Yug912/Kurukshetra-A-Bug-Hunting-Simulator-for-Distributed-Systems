@@ -119,12 +119,14 @@ func TestRunDir(t *testing.T) {
 
 func TestCheckRun(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, HistoryFile), []byte(`{"index":0,"client":0,"type":"invoke","f":"read","key":"k0","node":"n1","step":1,"wall_ns":1}
+	mustWrite(t, filepath.Join(dir, HistoryFile), []byte(`{"index":0,"client":0,"type":"invoke","f":"read","key":"k0","node":"n1","step":1,"wall_ns":1}
 {"index":1,"client":0,"type":"ok","f":"read","key":"k0","node":"n1","step":2,"wall_ns":2}
-`), 0o644)
-	os.WriteFile(filepath.Join(dir, ScenarioFile), []byte("name: s\nimage: img\ncheckers: [test-pass]\n"), 0o644)
+`))
+	mustWrite(t, filepath.Join(dir, ScenarioFile), []byte("name: s\nimage: img\ncheckers: [test-pass]\n"))
 	fid := 0.9
-	WriteResult(dir, Result{Seed: 9, Scenario: "s", Verdict: VerdictUnknown, Fidelity: &fid})
+	if err := WriteResult(dir, Result{Seed: 9, Scenario: "s", Verdict: VerdictUnknown, Fidelity: &fid}); err != nil {
+		t.Fatal(err)
+	}
 
 	r, err := CheckRun(dir, nil)
 	if err != nil {
@@ -158,5 +160,12 @@ func TestMetaRoundTrip(t *testing.T) {
 	got, err := ReadMeta(dir)
 	if err != nil || !reflect.DeepEqual(got, m) {
 		t.Fatalf("%v %+v", err, got)
+	}
+}
+
+func mustWrite(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

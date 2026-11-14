@@ -32,7 +32,7 @@ func env(k, def string) string {
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(v)
+	_ = json.NewEncoder(w).Encode(v)
 }
 
 func (s *server) kvHandler(w http.ResponseWriter, r *http.Request) {
@@ -112,8 +112,8 @@ func pinger(id string, peers []string) {
 			req, _ := http.NewRequest(http.MethodPost, "http://"+addr+"/peer/ping", bytes.NewReader([]byte("ping")))
 			req.Header.Set("X-Kuru-From", id)
 			if resp, err := c.Do(req); err == nil {
-				io.Copy(io.Discard, resp.Body)
-				resp.Body.Close()
+				_, _ = io.Copy(io.Discard, resp.Body)
+				_ = resp.Body.Close()
 			}
 		}
 	}

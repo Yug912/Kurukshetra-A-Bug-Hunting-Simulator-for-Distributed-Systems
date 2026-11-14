@@ -72,7 +72,9 @@ func TestConcurrentSeq(t *testing.T) {
 
 func TestReadFileErrors(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "t.jsonl")
-	os.WriteFile(p, []byte("{\"seq\":0,\"kind\":\"note\"}\n\n{bad\n"), 0o644)
+	if err := os.WriteFile(p, []byte("{\"seq\":0,\"kind\":\"note\"}\n\n{bad\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	_, err := ReadFile(p)
 	if err == nil || !strings.Contains(err.Error(), ":3:") {
 		t.Fatalf("want line 3 error, got %v", err)
