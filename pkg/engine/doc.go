@@ -1,2 +1,0 @@
-// Package engine is owned by Person A. Implemented on feat/engine.
-package engine

@@ -431,6 +431,41 @@ func lastLines(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
+// ListRunPrefix returns containers, networks and volumes whose kuru.run label
+// starts with prefix (e.g. "<scenario>-<seed>-"), without removing anything.
+func (c *Controller) ListRunPrefix(ctx context.Context, prefix string) ([]string, error) {
+	f := filters.NewArgs(filters.Arg("label", LabelKuru+"=1"))
+	var out []string
+	cs, err := c.cli.ContainerList(ctx, container.ListOptions{All: true, Filters: f})
+	if err != nil {
+		return nil, err
+	}
+	for _, ct := range cs {
+		if strings.HasPrefix(ct.Labels[LabelRun], prefix) {
+			out = append(out, "container "+strings.TrimPrefix(firstName(ct.Names), "/"))
+		}
+	}
+	ns, err := c.cli.NetworkList(ctx, network.ListOptions{Filters: f})
+	if err != nil {
+		return nil, err
+	}
+	for _, n := range ns {
+		if strings.HasPrefix(n.Labels[LabelRun], prefix) {
+			out = append(out, "network "+n.Name)
+		}
+	}
+	vs, err := c.cli.VolumeList(ctx, volume.ListOptions{Filters: f})
+	if err != nil {
+		return nil, err
+	}
+	for _, v := range vs.Volumes {
+		if strings.HasPrefix(v.Labels[LabelRun], prefix) {
+			out = append(out, "volume "+v.Name)
+		}
+	}
+	return out, nil
+}
+
 func firstName(names []string) string {
 	if len(names) == 0 {
 		return ""
