@@ -2,7 +2,7 @@
 
 ## Status
 
-M1–M6 done. Next: M7 (explorer + cleanup). Checkpoint #1 reached; not pushed (the humans push — see Decisions).
+M1–M7 done. Next: M8 (stream/tcp mode). Checkpoint #1 reached; not pushed (the humans push — see Decisions).
 
 ## Milestones
 
@@ -12,7 +12,7 @@ M1–M6 done. Next: M7 (explorer + cleanup). Checkpoint #1 reached; not pushed (
 - [x] **M4 Fault plan + executor** (2026-11-14) — `Plan` identical for same seed, differs across seeds, `Validate` passes for seeds 1–100 at n = 1, 2, 3, 5, 7 (incl. dense configs that force no-overlap pushes and minority skips); toggling one fault type does not reshuffle others; executor tested with fake proxy/docker/HTTP (404 → `unsupported=true`, HealAll idempotent).
 - [x] **M5 Engine + `kuru run`** (2026-11-14) — `kuru run examples/fake-smoke.yaml --seed 1` → `seed=1 verdict=PASS checks=fake-pass:PASS faults=9 dir=runs/fake-smoke/1`; trace has partitions (incl. bridge), crashes/restarts, pause/resume, clock skews, drops, dups, delays; 0 undecided messages. `scripts/engine-determinism.sh` → faults.json identical, 99.59% identical decisions on 488 shared IDs. Ctrl-C mid-run → verdict ERROR, exit 2, 0 containers/networks/volumes left. Integration tests: fake-smoke PASS + all files, cancel cleans up, missing image → ERROR result + cleanup.
 - [x] **M6 Replay** (2026-11-14) — `scripts/engine-replay-check.sh` (run + replay of fake-smoke seeds 1–5), 8 rounds = 40 pairs: all ≥ 95% (lowest 96.2%, 35/40 at 99.6–100%), fault events 17/17…21/21 exact, verdict reproduced every time. Unit tests: matcher cases (on time, early hold, startup counterpart, late-nearest, skip, extra), bounded freeze, no wait on blocked sender, forced decisions/timing, guide building, fidelity scoring, NextDir. Integration: `TestReplayFidelity` (seed 3 ≥ 95%, `replay_of`, `replay-fidelity.json`). Determinism re-checked: fault plan identical, seed-driven decisions 100% (seeds 1–3), all decisions 95.7–100%.
-- [ ] M7 Explorer + cleanup
+- [x] **M7 Explorer + cleanup** (2026-11-14) — `kuru explore examples/fake-faults.yaml --runner fake-faults --runs 500 --parallel 8` → 500 runs in 0.77 s, 266 pass / 234 fail, summary.csv 501 lines, only FAIL dirs kept, exit 1. `kuru explore examples/fake-smoke.yaml --runs 12 --parallel 4` (Docker) → 12/12 PASS in 17 s (~42 runs/min), 0 containers/networks/volumes left. Ctrl-C mid-explore → no new seeds, 4 in-flight runs cleaned up and reported as interrupted, summary printed, 0 left. `kuru run --keep` then `kuru cleanup` → lists and removes 3 containers, 1 network, 3 volumes; second cleanup removes nothing. Unit tests (`-race`, ×5): CSV header/rows/append, passing dirs deleted and failing kept, exact `--stop-after-fails`, cancel stops seeds, progress line, unknown runner.
 - [ ] M8 Stream mode (tcp)
 - [ ] M9 Hardening, performance, docs
 
@@ -37,6 +37,7 @@ M1–M6 done. Next: M7 (explorer + cleanup). Checkpoint #1 reached; not pushed (
 - `run_start` meta records `no_message_faults=true` so a replay of a shrunk run keeps message faults off.
 - Determinism metric: `engine-tracediff` reports seed-driven decisions (threshold, expected 100%) and all decisions (informational). Messages cut by a partition or decided in the quiet period depend on node timers (when the message arrives relative to a fixed partition step), which the determinism model explicitly does not control; the prompt's "≥ 99% identical decisions" holds for seed-driven decisions (100%), overall is 95–100%.
 - Port allocation verifies a port is free on both 127.0.0.1 and 0.0.0.0, and the proxy reserves its ports; on macOS a Docker/Colima port forward on 127.0.0.1:P silently shadows the proxy's 0.0.0.0:P (seen once: a whole link bypassed the proxy). The engine warns about links with no run-phase traffic.
+- Explore: runs interrupted by Ctrl-C are not results (not in the CSV, their dirs removed); a worker takes its next seed only after its result is counted, so `--stop-after-fails K` stops at exactly K; exit code 0 no failures, 1 any FAIL, 2 errors only. The failing-seed list is capped at 20 (the CSV has all). The suggested next commands are `kuru shrink <dir>` and `kuru replay <dir>` (shrink syntax is Person B's; adjust if it differs).
 - `pkg/replay` holds the pure parts (guide, fidelity, decision diff); the engine imports it, never the reverse.
 - `scripts/engine-tracediff/` is a small Go command used by `scripts/engine-determinism.sh` (no jq/python dependency).
 
@@ -52,4 +53,4 @@ M1–M6 done. Next: M7 (explorer + cleanup). Checkpoint #1 reached; not pushed (
 
 ## Next step
 
-M7: `pkg/explore` (seed list, worker pool over `core.NewRunner`, delete passing dirs unless --keep-passing, summary.csv via one writer goroutine, live progress line, Ctrl-C drain, failing-seed hints) + `cmd/kuru/explore.go` and `cmd/kuru/cleanup.go` (CleanupAll, print removed).
+M8: stream mode in `pkg/netproxy/tcp.go` — per ordered pair accept TCP, each client-side Read chunk is a message `<from>-<to>-<n>` (meta mode=tcp, conn=<k>) through the same scheduler; deliver/delay (FIFO per connection)/drop = reset (`reason=reset`); dup treated as deliver; partitions refuse new and reset existing connections; reply direction piped directly but recorded with meta dir=reply. Unit tests with a local TCP echo server; `examples/engine-tcp-smoke.yaml` only if fake-node can speak tcp (it cannot — use an echo test instead).
