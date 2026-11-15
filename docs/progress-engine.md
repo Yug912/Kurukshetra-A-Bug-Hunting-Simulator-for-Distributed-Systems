@@ -2,7 +2,7 @@
 
 ## Status
 
-M1–M9 done (2026-11-14). Nothing pushed: the humans push (see Decisions). Waiting for Person B's work on main to run the toy KV checks of checkpoints #1/#2 and the final loop.
+M1–M9 done (2026-11-14); toy KV checks and full loop verified against Person B's `origin/anushka` (2026-11-15). Remaining: humans merge both branches into main and open the PRs.
 
 ## Milestones
 
@@ -15,6 +15,15 @@ M1–M9 done (2026-11-14). Nothing pushed: the humans push (see Decisions). Wait
 - [x] **M7 Explorer + cleanup** (2026-11-14) — `kuru explore examples/fake-faults.yaml --runner fake-faults --runs 500 --parallel 8` → 500 runs in 0.77 s, 266 pass / 234 fail, summary.csv 501 lines, only FAIL dirs kept, exit 1. `kuru explore examples/fake-smoke.yaml --runs 12 --parallel 4` (Docker) → 12/12 PASS in 17 s (~42 runs/min), 0 containers/networks/volumes left. Ctrl-C mid-explore → no new seeds, 4 in-flight runs cleaned up and reported as interrupted, summary printed, 0 left. `kuru run --keep` then `kuru cleanup` → lists and removes 3 containers, 1 network, 3 volumes; second cleanup removes nothing. Unit tests (`-race`, ×5): CSV header/rows/append, passing dirs deleted and failing kept, exact `--stop-after-fails`, cancel stops seeds, progress line, unknown runner.
 - [x] **M8 Stream mode (tcp)** (2026-11-14) — unit tests (`-race`, ×3) with a local TCP echo server: 5 chunks delivered in reverse order arrive intact and in order (FIFO per connection), drop → client sees a reset + `msg_drop reason=reset`, partition resets the existing connection and refuses new ones while the other direction keeps working, duplicate = single delivery, reply direction recorded with `dir=reply`. `examples/engine-tcp-smoke.yaml` (fake-node, whose peer HTTP runs over TCP): `kuru run … --seed 1` → PASS, 419 tcp chunks, 410 recorded replies, 6 resets, 61 refused connections during partitions; integration test `TestRunTCPMode`.
 - [x] **M9 Hardening, performance, docs** (2026-11-14) — `kuru explore examples/fake-smoke.yaml --runs 50 --parallel 4` (Docker) → 50/50 PASS in 69 s, 0 containers/networks/volumes left. `TestNoGoroutineLeaks` (3 engine runs, goroutine count back to baseline). Every `Close` idempotent (proxy, executor HealAll, cleanup). Containers start in parallel; health checks back off (20 ms → 500 ms); `step_ms` configurable; images reused (never pulled); per-phase timings in `logs/engine-timings.json`. `golangci-lint run --build-tags integration ./...` → 0 issues (shared code fixed in a separate commit on main). `docs/engine.md` complete: architecture diagram, run phases, proxy, scheduler, faults, determinism model and limits, replay, explore, stream mode, run folder, CLI reference, troubleshooting, README snippet.
+
+## Toy KV (checkpoints #1/#2, 2026-11-15)
+
+Done in a throwaway worktree: `feat/engine` + `origin/anushka` (Person B's M1–M9, not yet on main) merged cleanly; `go build`, `go vet`, `go test ./...` (20 packages) green; `make images` builds `kuru/toykv`.
+
+- Bug on/off: `kuru run examples/toykv-stale-read.yaml --seed 1|2|3` → FAIL (`linearizable-kv:FAIL,durability:PASS`, 12–14 faults); `examples/toykv-correct.yaml --seed 1|2|3` → PASS. 0 containers left.
+- Full loop: `kuru explore examples/toykv-stale-read.yaml --runs 8 --parallel 4 --start-seed 10` → 8/8 FAIL, 0 containers/networks left → `kuru shrink runs/toykv-stale-read/1 --parallel 4` → 0 faults needed (from 12; the stale-read bug fails without faults), 8 trial runs, 40 s → `kuru replay` of the original and of `1-min` → verdict FAIL reproduced both times → `kuru serve` API lists all runs with `fidelity` and `replay_of` (the viewer page needs `web/timeline/dist`, built by Person B's npm step).
+- Replay fidelity on toy KV: 79.7% (original, faults 24/24 exact), 82.6% (minimal run). Lower than fake-node as expected: Raft election timeouts are randomized inside the node, which the engine does not control. Verdict reproduced in every replay.
+- No engine-side fixes were needed.
 
 ## Decisions
 
@@ -56,6 +65,5 @@ None open. Fixed directly on main as small separate commits (shared code, no con
 
 ## Next step
 
-1. Humans: push `main` and `feat/engine`, then open the PR `feat/engine → main` ("Engine checkpoint", engine merges first).
-2. After Person B's work is on main: `git rebase origin/main`, then `kuru run examples/toykv-stale-read.yaml --seed <a few seeds>` with the bug on and off (expect FAIL / PASS) and record it here; then the full loop explore → shrink → replay → serve on toy KV, and record replay fidelity on toy KV.
-3. Final: rebase, full test suite + integration, push, PR "Engine v0.1.0".
+1. Humans: push `main` (2 shared fixes), open PR `feat/engine → main` ("Engine v0.1.0", engine merges first), then merge Person B's branch (`anushka`, rebased on main).
+2. After both are on main: `git rebase origin/main`, rerun `go test ./...` and `make test-integration` once as a final confirmation.
