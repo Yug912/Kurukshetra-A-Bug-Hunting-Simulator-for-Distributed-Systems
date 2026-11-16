@@ -25,6 +25,13 @@ Done in a throwaway worktree: `feat/engine` + `origin/anushka` (Person B's M1–
 - Replay fidelity on toy KV: 79.7% (original, faults 24/24 exact), 82.6% (minimal run). Lower than fake-node as expected: Raft election timeouts are randomized inside the node, which the engine does not control. Verdict reproduced in every replay.
 - No engine-side fixes were needed.
 
+Re-check on 2026-11-17 (same merge, Person B's "Next step" list):
+- Seeds 1–20, `kuru explore … --runs 20 --parallel 4`: `toykv-correct` 20 PASS; `toykv-stale-read` 20 FAIL; `toykv-lost-write` 20 FAIL; **`toykv-lease-clock` 20 PASS (bug not found)**. 0 containers left.
+- Cause (scenario, not engine): toy KV stores and checks the lease on the same skewed clock, so a constant offset cancels out; only a *backward clock jump on an isolated leader during a partition* triggers the bug. With `skew [-800,800]` every 200–400 steps at 2 ms/step that almost never lines up. Clock skews are applied (`clock_skew offset_ms=…`, never `unsupported`). Verified fix for B's `examples/toykv-lease-clock.yaml`: `step_ms: 10`, `duration_steps: 1500`, `partition_every: [100, 200]`, `partition_len: [150, 300]`, `clock_skew_every: [15, 40]`, `clock_skew_ms: [-3000, 3000]`, no message/crash faults → lease bug 5/12 FAIL, correct build under the same faults 12/12 PASS.
+- etcd (tcp mode): `kuru/etcd:buggy` built; `kuru explore examples/real-etcd-buggy.yaml --runs 20 --parallel 4` → 20/20 FAIL, 0 left. `kuru/etcd:fixed` could not be built here (GitHub release download refused by the network), so the fixed side of the 200-run acceptance is not run yet.
+- Viewer: `npm test` 19 pass, `npm run build` OK; `kuru serve` returns the viewer (200), the real trace, `linearizability.html`, `/api/summary/<scenario>` from the explorer's `summary.csv` (location matches) and the compare view. The engine emits no `note` events with `meta.leader`, so the viewer's leader box shows "unknown" (optional per B's notes).
+- `golangci-lint --build-tags integration` on the merge: 4 errcheck issues, all in B's integration tests (`pkg/workload/integration_test.go:59`, `pkg/workload/toykv_bugs_integration_test.go:109`, `targets/toykv/integration_test.go:51,52`).
+
 ## Decisions
 
 - Docker runtime on the dev Mac is Colima (`brew install colima docker docker-buildx`, `colima start`). `docker.New()` falls back to `~/.colima/default/docker.sock` (and Docker Desktop / OrbStack / Rancher sockets) when `DOCKER_HOST` is unset and `/var/run/docker.sock` is missing. `host.docker.internal:host-gateway` reaches the macOS host from Colima containers; `KURU_PROXY_HOST` overrides it if needed.
