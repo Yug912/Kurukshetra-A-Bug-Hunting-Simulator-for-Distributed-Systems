@@ -56,7 +56,7 @@ func TestWorkloadAgainstCompose(t *testing.T) {
 		ok := false
 		for _, n := range cl.Nodes {
 			if resp, err := http.Get(n.ClientURL + "/kv/k0"); err == nil {
-				resp.Body.Close()
+				_ = resp.Body.Close()
 				ok = ok || resp.StatusCode == 404 || resp.StatusCode == 200
 			}
 		}
