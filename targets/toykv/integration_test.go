@@ -48,8 +48,11 @@ func composeLeader(t *testing.T, skip string, timeout time.Duration) string {
 				continue
 			}
 			var h struct{ State string }
-			json.NewDecoder(resp.Body).Decode(&h)
-			resp.Body.Close()
+			err = json.NewDecoder(resp.Body).Decode(&h)
+			_ = resp.Body.Close()
+			if err != nil {
+				continue
+			}
 			if h.State == "leader" {
 				return id
 			}

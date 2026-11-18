@@ -106,7 +106,9 @@ func runToyKVCase(t *testing.T, bc bugCase) (core.CheckResult, core.CheckResult)
 	time.Sleep(6 * time.Second)
 	if bc.stopAtHeal {
 		cancel()
-		<-done
+		if err := <-done; err != nil {
+			t.Logf("workload stopped by cancel: %v", err)
+		}
 	}
 	docker(t, "network", "connect", "--alias", "p-"+leader, network, container)
 	if !bc.stopAtHeal {

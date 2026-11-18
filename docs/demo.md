@@ -22,7 +22,7 @@ scripts/brain-demo-prep.sh            # builds kuru, the viewer and all images; 
 | 1:20 | "Here is the minimal run on the timeline." | browser → run list → the `…-min` run → **▶ play** | partition band appears, messages to n1 become red ✕ |
 | 1:40 | "Jump straight to the violation." | **⚑ jump to first violation** | playhead at the read outlined red. Click it: "R k0→c0-1 on n1 … Flagged by linearizable-kv: stale read…" |
 | 2:00 | "Replays are deterministic: same decisions, same failure." | `./bin/kuru replay $FAIL` (prepped), then **vs original** in the run list | the same FAIL, fidelity shown in the header, both timelines synced |
-| 2:30 | "Now a bug that needs clock drift." | run list → filter `toykv-lease-clock` → a FAIL run | `⏱-700ms` badge on the old leader, stale read after the new leader is elected |
+| 2:30 | "Now a bug that needs clock drift." | run list → filter `toykv-lease-clock` → a FAIL run | a negative `⏱` skew badge (backward jump) on the isolated old leader, stale read after the new leader is elected |
 | 3:00 | "And a real system: etcd 2.3.8, the stale reads Jepsen found in 2014." | run list → `real-etcd-buggy` FAIL, then `real-etcd-fixed` | buggy: `stale read of k0 on n3`; fixed (etcd 3.5.17): PASS on the same seeds |
 | 3:30 | "The correct build passes 200 seeds." | run list → filter `toykv-correct`, verdict PASS | 200 of 200 PASS |
 | 3:50 | "Explore, shrink, replay, see it." | – | – |
