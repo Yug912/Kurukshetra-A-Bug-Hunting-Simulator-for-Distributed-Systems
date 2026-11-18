@@ -2,7 +2,7 @@
 
 ## Status
 
-M1–M9 done (2026-11-14); toy KV checks and full loop verified against Person B's `origin/anushka` (2026-11-15). Remaining: humans merge both branches into main and open the PRs.
+M1–M9 done (2026-11-14); toy KV checks and full loop verified against Person B's `origin/anushka` (2026-11-15). Both sides verified together (2026-11-19). Remaining: humans merge both branches into main.
 
 ## Milestones
 
@@ -31,6 +31,11 @@ Re-check on 2026-11-17 (same merge, Person B's "Next step" list):
 - etcd (tcp mode): `kuru/etcd:buggy` built; `kuru explore examples/real-etcd-buggy.yaml --runs 20 --parallel 4` → 20/20 FAIL, 0 left. `kuru/etcd:fixed` could not be built here (GitHub release download refused by the network), so the fixed side of the 200-run acceptance is not run yet.
 - Viewer: `npm test` 19 pass, `npm run build` OK; `kuru serve` returns the viewer (200), the real trace, `linearizability.html`, `/api/summary/<scenario>` from the explorer's `summary.csv` (location matches) and the compare view. The engine emits no `note` events with `meta.leader`, so the viewer's leader box shows "unknown" (optional per B's notes).
 - `golangci-lint --build-tags integration` on the merge: 4 errcheck issues, all in B's integration tests (`pkg/workload/integration_test.go:59`, `pkg/workload/toykv_bugs_integration_test.go:109`, `targets/toykv/integration_test.go:51,52`).
+
+Final combined check on 2026-11-19 (`feat/engine` + `origin/anushka` at b584576, merged cleanly):
+- `go vet`, `go test ./...`, `golangci-lint run --build-tags integration ./...` → 0 issues; `make test-integration` all packages ok (compose tests need the `docker compose` plugin: `brew install docker-compose`).
+- `toykv-lease-clock` with B's fixed scenario, seeds 1–20 → 5 FAIL / 15 PASS (bug found); same faults without `BUG_LEASE_READ` → 20/20 PASS. 0 containers left.
+- Ready to merge: engine first, then `anushka` rebased on main.
 
 ## Decisions
 
