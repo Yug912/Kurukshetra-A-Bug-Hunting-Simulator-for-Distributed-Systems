@@ -1,0 +1,363 @@
+:root {
+  --bg: #ffffff;
+  --panel: #f6f7f9;
+  --border: #d9dce1;
+  --text: #1d2127;
+  --muted: #69707a;
+  --lane: #b9bec6;
+  --accent: #2f6fde;
+  --ok: #2e9d57;
+  --fail: #8a929c;
+  --info: #d48a10;
+  --bad: #d7263d;
+  --pass-bg: #2e9d57;
+  --fail-bg: #d7263d;
+  --other-bg: #7b828c;
+  --msg: #5b6573;
+  --delay: #d48a10;
+  --drop: #d7263d;
+  --partition: rgba(122, 92, 230, 0.12);
+  --partition-text: #6247c8;
+  --down: #d7263d;
+  --paused: rgba(120, 128, 140, 0.35);
+  --final: #7a5ce6;
+  --select: #2f6fde;
+  --playhead: #2f6fde;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181d;
+    --panel: #1d2128;
+    --border: #2f3540;
+    --text: #e5e8ec;
+    --muted: #9aa2ad;
+    --lane: #4a515c;
+    --accent: #6f9cf0;
+    --ok: #47b874;
+    --fail: #8d96a1;
+    --info: #e5a23a;
+    --bad: #ff5266;
+    --msg: #9aa4b2;
+    --delay: #e5a23a;
+    --drop: #ff5266;
+    --partition: rgba(150, 125, 255, 0.16);
+    --partition-text: #b3a2ff;
+    --paused: rgba(150, 158, 170, 0.35);
+    --final: #a48cff;
+    --select: #6f9cf0;
+    --playhead: #6f9cf0;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+a {
+  color: var(--accent);
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.header h1 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.header .meta {
+  color: var(--muted);
+}
+
+.header .links a {
+  margin-right: 10px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.badge.PASS {
+  background: var(--pass-bg);
+}
+
+.badge.FAIL {
+  background: var(--fail-bg);
+}
+
+.badge.other {
+  background: var(--other-bg);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.toolbar .group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+}
+
+.toolbar .group > span {
+  color: var(--muted);
+}
+
+.toolbar label {
+  white-space: nowrap;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.canvas {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.timeline svg {
+  display: block;
+  user-select: none;
+  cursor: grab;
+}
+
+.timeline svg.dragging {
+  cursor: grabbing;
+}
+
+.note {
+  color: var(--muted);
+  padding: 4px 16px;
+  font-size: 12px;
+}
+
+.details {
+  width: 340px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--panel);
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.details h2 {
+  font-size: 13px;
+  margin: 0 0 6px;
+}
+
+.details pre {
+  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.details .friendly {
+  margin-bottom: 8px;
+}
+
+.minimap {
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.minimap svg {
+  display: block;
+  cursor: pointer;
+}
+
+.lane-label {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.client-label {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.axis text {
+  fill: var(--muted);
+  font-size: 10px;
+}
+
+.axis line {
+  stroke: var(--border);
+}
+
+.op-label {
+  fill: var(--text);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.player {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.player .step {
+  font-variant-numeric: tabular-nums;
+  min-width: 90px;
+}
+
+.cluster-state {
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.cluster-state table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.cluster-state td,
+.cluster-state th {
+  text-align: left;
+  padding: 2px 6px 2px 0;
+}
+
+.state-up {
+  color: var(--ok);
+}
+
+.state-down {
+  color: var(--bad);
+}
+
+.state-paused {
+  color: var(--muted);
+}
+
+.runlist {
+  padding: 16px;
+  overflow: auto;
+}
+
+.runlist table {
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 1100px;
+}
+
+.runlist th,
+.runlist td {
+  text-align: left;
+  padding: 4px 10px 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.runlist .filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.compare {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.compare .pane {
+  border-bottom: 2px solid var(--border);
+}
+
+.compare .timeline {
+  overflow: visible;
+}
+
+.compare .pane-title {
+  padding: 4px 16px;
+  font-weight: 600;
+  background: var(--panel);
+}
+
+.error {
+  color: var(--bad);
+  padding: 16px;
+}
