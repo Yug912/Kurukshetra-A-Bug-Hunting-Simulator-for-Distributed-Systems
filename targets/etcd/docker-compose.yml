@@ -1,0 +1,40 @@
+# Three etcd members behind kuru-etcd-shim, wired directly (no Kurukshetra proxy).
+# Peer traffic uses the "peers" network (aliases p-n1..p-n3), client traffic the default network, so
+# `docker network disconnect <project>_peers <container>` cuts a member off from its peers while clients
+# can still reach it. Choose the version with ETCD_IMAGE=kuru/etcd:buggy|kuru/etcd:fixed.
+x-node: &node
+  image: ${ETCD_IMAGE:-kuru/etcd:fixed}
+networks:
+  default: {}
+  peers: {}
+services:
+  n1:
+    <<: *node
+    environment:
+      NODE_ID: n1
+      PEERS: n2=p-n2:7000,n3=p-n3:7000
+    networks:
+      default: {}
+      peers:
+        aliases: [p-n1]
+    ports: ["${ETCD_PORT_N1:-18281}:8080"]
+  n2:
+    <<: *node
+    environment:
+      NODE_ID: n2
+      PEERS: n1=p-n1:7000,n3=p-n3:7000
+    networks:
+      default: {}
+      peers:
+        aliases: [p-n2]
+    ports: ["${ETCD_PORT_N2:-18282}:8080"]
+  n3:
+    <<: *node
+    environment:
+      NODE_ID: n3
+      PEERS: n1=p-n1:7000,n2=p-n2:7000
+    networks:
+      default: {}
+      peers:
+        aliases: [p-n3]
+    ports: ["${ETCD_PORT_N3:-18283}:8080"]

@@ -1,0 +1,53 @@
+# Three toy KV nodes wired directly to each other (no Kurukshetra proxy).
+# Build first: docker build -t kuru/toykv -f targets/toykv/Dockerfile .
+# Then: docker compose -f targets/toykv/docker-compose.yml up -d
+# Peer traffic uses the "peers" network (aliases p-n1..p-n3), client traffic the default network, so
+# `docker network disconnect <project>_peers <container>` cuts a node off from its peers while clients
+# can still reach it. Bug flags pass through from the environment (BUG_STALE_READ=1 docker compose up ...).
+x-node: &node
+  image: kuru/toykv
+  environment: &env
+    PEER_LISTEN: ":7000"
+    CLIENT_LISTEN: ":8080"
+    DATA_DIR: /data
+    LOG_LEVEL: ${LOG_LEVEL:-WARN}
+    BUG_STALE_READ: ${BUG_STALE_READ:-0}
+    BUG_ACK_BEFORE_COMMIT: ${BUG_ACK_BEFORE_COMMIT:-0}
+    BUG_LEASE_READ: ${BUG_LEASE_READ:-0}
+networks:
+  default: {}
+  peers: {}
+services:
+  n1:
+    <<: *node
+    environment:
+      <<: *env
+      NODE_ID: n1
+      PEERS: n2=p-n2:7000,n3=p-n3:7000
+    networks:
+      default: {}
+      peers:
+        aliases: [p-n1]
+    ports: ["${TOYKV_PORT_N1:-18081}:8080"]
+  n2:
+    <<: *node
+    environment:
+      <<: *env
+      NODE_ID: n2
+      PEERS: n1=p-n1:7000,n3=p-n3:7000
+    networks:
+      default: {}
+      peers:
+        aliases: [p-n2]
+    ports: ["${TOYKV_PORT_N2:-18082}:8080"]
+  n3:
+    <<: *node
+    environment:
+      <<: *env
+      NODE_ID: n3
+      PEERS: n1=p-n1:7000,n2=p-n2:7000
+    networks:
+      default: {}
+      peers:
+        aliases: [p-n3]
+    ports: ["${TOYKV_PORT_N3:-18083}:8080"]

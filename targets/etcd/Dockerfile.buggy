@@ -1,0 +1,32 @@
+# kuru/etcd:buggy — etcd v2.3.8 (v2 keys API; default reads are served by whichever member is asked,
+# so a partitioned or lagging member can return stale data).
+# Build from the repo root: docker build -t kuru/etcd:buggy -f targets/etcd/Dockerfile.buggy .
+#
+# etcd 2.3.8 releases ship only a Go 1.7 linux/amd64 binary, which crashes under qemu emulation on arm64
+# hosts (runtime: newosproc errno=22). So the pinned v2.3.8 source is compiled for the host architecture
+# with Go 1.10, the newest toolchain that still builds its Godeps/GOPATH layout unchanged.
+FROM golang:1.10 AS etcd
+ARG ETCD_VERSION=2.3.8
+ARG ETCD_SRC_SHA256=6a138b2005e42b0961a12886cc641b792e991cd631fdb502ec5c614b65231cd1
+WORKDIR /build
+# etcd 2.x refuses to start on arm64 unless this is set; it is ignored on amd64.
+ENV ETCD_UNSUPPORTED_ARCH=arm64
+RUN wget -qO src.tgz https://github.com/etcd-io/etcd/archive/refs/tags/v${ETCD_VERSION}.tar.gz \
+ && echo "${ETCD_SRC_SHA256}  src.tgz" | sha256sum -c - \
+ && tar xzf src.tgz \
+ && cd etcd-${ETCD_VERSION} && ./build && ./bin/etcd --version \
+ && cp bin/etcd /etcd
+
+FROM golang:1.26 AS shim
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY targets/etcd/shim/ targets/etcd/shim/
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /kuru-etcd-shim ./targets/etcd/shim
+
+FROM alpine:3.21
+COPY --from=etcd /etcd /usr/local/bin/etcd
+COPY --from=shim /kuru-etcd-shim /usr/local/bin/kuru-etcd-shim
+ENV PEER_LISTEN=:7000 CLIENT_LISTEN=:8080 DATA_DIR=/data ETCD_BIN=/usr/local/bin/etcd ETCD_UNSUPPORTED_ARCH=arm64
+EXPOSE 7000 8080
+VOLUME /data
+ENTRYPOINT ["/usr/local/bin/kuru-etcd-shim"]
