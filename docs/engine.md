@@ -2,7 +2,7 @@
 
 The engine runs one scenario with one seed on Docker. It puts a proxy between every pair of nodes, drives a logical clock, injects faults from a deterministic plan, runs the workload, checks the history and writes a run folder.
 
-Contents: [Architecture](#architecture) · [Run phases](#run-phases) · [Proxy](#proxy) · [Scheduler](#scheduler) · [Faults](#faults) · [Determinism model](#determinism-model) · [Replay](#replay) · [Explore](#explore) · [Stream mode](#stream-mode-tcp) · [Run folder](#run-folder) · [CLI reference](#cli-reference) · [Troubleshooting](#troubleshooting) · [README snippet](#readme-snippet)
+Contents: [Architecture](#architecture) · [Run phases](#run-phases) · [Proxy](#proxy) · [Scheduler](#scheduler) · [Faults](#faults) · [Leader notes](#leader-notes) · [Determinism model](#determinism-model) · [Replay](#replay) · [Explore](#explore) · [Stream mode](#stream-mode-tcp) · [Run folder](#run-folder) · [CLI reference](#cli-reference) · [Troubleshooting](#troubleshooting) · [README snippet](#readme-snippet)
 
 ## Architecture
 
@@ -46,7 +46,7 @@ Nodes never talk to each other directly. Each node's `PEERS` points at the proxy
 | `docker_setup` | Ping Docker, check the image exists locally (never pulls), create a labelled bridge network, open the proxy listeners. |
 | `start_containers` | Start the N containers in parallel with `NODE_ID`, `PEER_LISTEN`, `CLIENT_LISTEN`, `PEERS` (proxy addresses), `DATA_DIR=/data`, `KURU_CLOCK_OFFSET_MS=0`, plus `scenario.env`. Each node gets a named volume at `/data` and two host ports on 127.0.0.1 that survive restarts. |
 | `health` | Wait (with backoff, 30 s max) for `GET /kuru/health` = 200 on every node. Peer traffic passes straight through at step 0 with startup IDs (`<from>-<to>-s<n>`) so a Raft target can elect a leader. |
-| `faults_and_workload` | The clock starts. The workload runs in a goroutine; the scheduler ticks `duration_steps` steps of `step_ms` each. |
+| `faults_and_workload` | A leader watcher starts (see Leader notes). The clock starts. The workload runs in a goroutine; the scheduler ticks `duration_steps` steps of `step_ms` each. |
 | `heal_and_quiet` | `HealAll` (unblock links, restart crashed, unpause paused, reset clocks), then `quiet_steps` steps delivering everything. |
 | `final_reads` | The workload reads every key from every node while the clock keeps ticking (quiet). `run_end` is written. |
 | `teardown` | Wait for in-flight deliveries, close the proxy and writers, copy container logs to `logs/<node>.log`, remove containers, network and volumes (unless `--keep`). |
@@ -98,6 +98,14 @@ The plan is sorted by step, then kind. `faults.Validate` checks these rules; the
 | `clock_skew` | `POST /kuru/clock {"offset_ms":X}`; a 404 is recorded as `unsupported=true`. Trace: `clock_skew` meta `offset_ms`. | Reset to 0 at `HealAll`. |
 
 `HealAll` is idempotent. A fault that fails (e.g. clock skew on a node that is down) is recorded as a `note` event and the run continues.
+
+## Leader notes
+
+So the viewer can show who leads, the engine polls `GET /kuru/health` on every node's **client** port every 100 ms (`pkg/engine/leader.go`), from the moment the cluster is healthy until just before `run_end`. Whenever the leader changes it writes a trace event `{"kind":"note","node":"n2","meta":{"msg":"leader changed","leader":"n2","term":"3"}}` at the current step.
+
+- The leader is the node reporting `state: "leader"` with the highest term (an isolated old leader may still claim leadership with an older term); ties go to the lowest node ID. An election in progress (no node claims leadership) is not a change. Crashed, paused or slow nodes give no answer that round. Fake nodes report `single` and never produce a note.
+- **No effect on decisions:** the polls go to the client ports, never through the proxy, draw no randomness and never touch the scheduler. `note` is not a decision kind (`trace.IsDecision`), so replay matching, fidelity and `engine-tracediff` ignore these events. Their steps depend on wall-clock timing, like other notes.
+- Checked 2026-11-20 on a real `toykv-lease-clock` FAIL: notes `n2` at step 50 (term 2) and `n3` at step 670 (term 4); at step 715 the viewer's cluster box shows `leader: n3` with n3 starred while the isolated old leader n2 serves the stale read ([timeline-leader.png](timeline-leader.png)).
 
 ## Determinism model
 

@@ -37,6 +37,24 @@ Final combined check on 2026-11-19 (`feat/engine` + `origin/anushka` at b584576,
 - `toykv-lease-clock` with B's fixed scenario, seeds 1–20 → 5 FAIL / 15 PASS (bug found); same faults without `BUG_LEASE_READ` → 20/20 PASS. 0 containers left.
 - Ready to merge: engine first, then `anushka` rebased on main.
 
+## Final check on main (2026-11-20)
+
+`main` at d628e9e (both branches merged, tag v0.1.0), branch `final-checks`, macOS arm64, Colima 0.10 (4 CPU, 6 GB), Go 1.27.4, Node 20.20, golangci-lint 2.15.
+
+| Check | Result |
+| --- | --- |
+| `go vet ./...` | clean |
+| `go test ./...` | 20 of 20 packages ok |
+| `make images`, `scripts/brain-build-images.sh` | `kuru/fake-node`, `kuru/toykv`, `kuru/etcd:buggy`, `kuru/etcd:fixed` all built (the fixed image's GitHub download worked here) |
+| `make test-integration` | 20 of 20 packages ok in 4 m 38 s (incl. etcd buggy/fixed and every toy KV bug flag) |
+| `npm ci && npm test && npm run build` (web/timeline) | 19 tests pass, build OK |
+| `kuru explore examples/toykv-correct.yaml --runs 20 --parallel 4` | **20 PASS / 0 FAIL** in 1 m 23 s |
+| `kuru explore examples/toykv-stale-read.yaml --runs 20 --parallel 4` | **0 PASS / 20 FAIL** in 43 s |
+| `kuru explore examples/toykv-lost-write.yaml --runs 20 --parallel 4` | **0 PASS / 20 FAIL** in 1 m 24 s |
+| `kuru cleanup` afterwards | removed 0 containers, 0 networks, 0 volumes; `docker ps -a --filter label=kuru=1` empty |
+
+Nothing broke on macOS. GitHub CI on `main` was red, though, for a Linux-only reason: see Known issues.
+
 ## Decisions
 
 - Docker runtime on the dev Mac is Colima (`brew install colima docker docker-buildx`, `colima start`). `docker.New()` falls back to `~/.colima/default/docker.sock` (and Docker Desktop / OrbStack / Rancher sockets) when `DOCKER_HOST` is unset and `/var/run/docker.sock` is missing. `host.docker.internal:host-gateway` reaches the macOS host from Colima containers; `KURU_PROXY_HOST` overrides it if needed.
@@ -74,6 +92,7 @@ None open. Fixed directly on main as small separate commits (shared code, no con
 
 - Messages parked after the last quiet step (between final reads and proxy close) get no decision event.
 - Replay fidelity on targets with randomized timers (Raft election timeouts) is expected to be lower than on fake-node; it is reported, not guaranteed.
+- **Fixed 2026-11-20: CI red on Linux.** Every GitHub CI run since the merge failed in `go test ./pkg/netproxy` with `no unshadowed port: listen tcp 127.0.0.1:P: bind: address already in use`. `listenUnshadowed` probes 127.0.0.1:P after binding 0.0.0.0:P to catch macOS port-forward shadowing, but Linux always refuses that second bind, so every port was rejected. The probe now runs only where shadowing is possible (`darwin` and the BSDs, `shadowingPossible` in `pkg/netproxy/ports.go`); on Linux the kernel already rules shadowing out. Verified with `go test ./...` in `golang:1.26` (Linux): 20 of 20 packages ok. CI's golangci-lint is pinned to v2.15.0 instead of `latest`.
 
 ## Next step
 

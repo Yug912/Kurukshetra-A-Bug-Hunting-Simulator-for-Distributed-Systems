@@ -1,12 +1,15 @@
-# kuru run examples/toykv-lease-clock.yaml --seed 1   (needs Person A's engine and the kuru/toykv image)
+# kuru run examples/toykv-lease-clock.yaml --seed 1
 #
 # Why these faults: toy KV stores lastAck and checks the lease on the SAME
 # skewed clock, so a constant offset cancels out. The bug only fires when an
 # isolated old leader's clock jumps BACKWARDS during a partition (after a new
-# leader exists). So: frequent, large skews (both directions) and long
-# partitions, coarse 10 ms steps, and no drop/delay/crash noise that would
-# break the partition window. Verified on the merged branch: lease bug 5/12
-# FAIL, correct build under the same faults 12/12 PASS.
+# leader exists) and a client then reads from it. So: long runs with partitions
+# almost all the time, frequent and large clock jumps (both directions), a
+# read-heavy workload on few keys, coarse 10 ms steps, and no drop/delay/crash
+# noise that would break the partition window.
+#
+# Measured 2026-11-20 (30 seeds each): lease bug 23/30 FAIL (77%); the same
+# faults without BUG_LEASE_READ 30/30 PASS. Before this tuning: 10/30 (33%).
 name: toykv-lease-clock
 nodes: 3
 image: kuru/toykv
@@ -14,14 +17,17 @@ env:
   BUG_LEASE_READ: "1"
 workload:
   type: kv
-  clients: 4
-  keys: 2
-  ops_per_sec: 40
+  clients: 6
+  keys: 2            # one key = histories too long for the 10 s checker budget
+  ops_per_sec: 60
+  read_frac: 0.6
+  write_frac: 0.4
+  cas_frac: 0
 checkers: [linearizable-kv, durability]
-duration_steps: 1500
+duration_steps: 3000
 step_ms: 10
 faults:
   partition_every: [100, 200]
-  partition_len: [150, 300]
-  clock_skew_every: [15, 40]
-  clock_skew_ms: [-3000, 3000]
+  partition_len: [200, 400]
+  clock_skew_every: [10, 25]
+  clock_skew_ms: [-4000, 4000]

@@ -10,6 +10,7 @@ The brain side decides whether a run misbehaved and shows why. This guide covers
 | Checkers | `pkg/checker` | `linearizable-kv` (porcupine) and `durability` |
 | Shrinker | `pkg/shrink`, `kuru shrink` | messages-off → ddmin over faults → halve durations |
 | Viewer | `web/timeline`, `kuru serve` | React/SVG timeline with player, run list, compare mode |
+| Explainer | `pkg/explain`, `kuru explain` | Plain-English root-cause story of a failing run (rule-based, optional LLM rewrite) |
 
 ## Toy KV
 
@@ -25,7 +26,16 @@ A small Go program on `hashicorp/raft` that follows [PROTOCOL.md](PROTOCOL.md). 
 | `BUG_ACK_BEFORE_COMMIT=1` | The leader answers 200 to `PUT`/`CAS` before the entry commits | durability FAIL (acknowledged write lost) and linearizable-kv FAIL, when the leader is cut off or crashes before replicating |
 | `BUG_LEASE_READ=1` | The leader reads locally while `now() < lastAck + 300 ms`, on the skewable clock | linearizable-kv FAIL when a backwards clock skew plus a partition let the old leader serve reads after a new leader exists |
 
-**Why the lease bug needs a backward jump.** Toy KV records `lastAck` and checks the lease on the same skewed clock, so a constant offset cancels out: a node that has been 800 ms behind all along still sees its lease expire 300 ms after the last ack. The bug fires only when the clock of an isolated old leader jumps backwards during a partition, after a new leader has been elected. Then `now()` falls back inside the old lease window and the old leader serves stale local reads. The original scenario (skew ±800 ms every 200–400 steps at 2 ms/step, plus drop/delay/crash noise) almost never lined up a backward jump with a partition: 0 of 20 seeds failed. [examples/toykv-lease-clock.yaml](../examples/toykv-lease-clock.yaml) now uses 10 ms steps, 1500 steps, partitions every 100–200 steps lasting 150–300, skews of ±3000 ms every 15–40 steps, and no drop/delay/crash faults. Measured on the merged engine: lease bug 5 of 12 seeds FAIL, and the correct build under the same faults 12 of 12 PASS.
+**Why the lease bug needs a backward jump.** Toy KV records `lastAck` and checks the lease on the same skewed clock, so a constant offset cancels out: a node that has been 800 ms behind all along still sees its lease expire 300 ms after the last ack. The bug fires only when the clock of an isolated old leader jumps backwards by J ms during a partition, after a new leader has been elected: its lease window then stretches by J ms, and a client that reads from it in that window gets a stale value. Three things must line up (the partition isolates the leader, that node's clock jumps back, a client reads from it after a newer write), so detection is about exposure: how long, how often, and how many reads hit the isolated node.
+
+| Version of `examples/toykv-lease-clock.yaml` | Faults and workload | Lease bug FAIL | Same faults, bug off |
+| --- | --- | --- | --- |
+| Original | ±800 ms skew every 200–400 steps at 2 ms/step, plus drop/delay/crash | 0 of 20 | – |
+| 2026-11-19 | 1500 steps at 10 ms, partitions every 100–200 for 150–300, skew ±3000 ms every 15–40, no drop/delay/crash; 4 clients, 2 keys, 40 ops/s | 5 of 12; re-measured 2026-11-20: **10 of 30 (33%)** | 12 of 12 PASS |
+| 2026-11-20, one key (tried) | 3000 steps, partitions for 200–400, skew ±4000 ms every 10–25; 6 clients, **1 key**, 80 ops/s, 60% reads | 22 of 30, but 3 UNKNOWN (checker 10 s timeout on one long key) | – |
+| **2026-11-20 (current)** | 3000 steps at 10 ms, partitions every 100–200 for 200–400, skew ±4000 ms every 10–25; 6 clients, 2 keys, 60 ops/s, 60% reads, 40% writes | **23 of 30 (77%)**, 0 UNKNOWN | **30 of 30 PASS** |
+
+What moved the rate: twice the run length (twice the chances for the three events to line up), clock jumps every 100–250 ms instead of 150–400 ms and up to 8 s instead of 6 s (bigger, more frequent backward jumps), and a read-heavy workload with more clients (more reads land on the isolated node inside the window). Partitions stay on almost all the time; the strategy (which node gets isolated) cannot be chosen per scenario, so about a third of partitions isolate the current leader. `kuru explain` on a FAIL names the partition, the backward jump and the leader change, e.g. "n2 was cut off from the majority by the partition at step 546, and its clock jumped back 1688 ms at step 711 … The leader at that time was n3 (since step 670), not n2."
 
 Engine-free proof: `go test -tags integration -run ToyKVBugFlags ./pkg/workload` cuts the leader off from its peers for 6 s. The correct build PASSes and each flag FAILs. Measured results are in [progress-brain.md](progress-brain.md).
 
@@ -89,6 +99,27 @@ Any lost write → FAIL with `bad_ops` = W's indices and the reason `acknowledge
 
 **Output.** `minimal.json` and `shrink.log` (every trial with its verdict) go into the run dir, and `<run-dir>-min` is the trial run that proved the minimal schedule fails (`meta.faults_from` → minimal.json). It prints, e.g., `minimal: 2 faults (from 8) — crash n3 at step 195 for 1; partition n1 | n2,n3 at step 420 for 1 — 36 runs`. The runner is `--runner` if given, else the one in `meta.json` if registered, else `docker`.
 
+## Explainer (`kuru explain`)
+
+`kuru explain <run-dir> [--exact] [--llm]` writes a short root-cause story to `explain.md` in the run folder and prints it. Given a shrunk run, it explains `<run-dir>-min` (the minimal schedule) unless `--exact` is set.
+
+- **Facts** (`explain.Gather`): failing checks from `result.json`; each blamed op's invoke and completion from `history.jsonl`; for a stale read, the acknowledged write it should have seen (from the checker's "expected X"); the faults as they actually happened (trace `partition`/`heal`, `crash`/`restart`, `pause`/`resume`, `clock_skew`); and leader changes (trace `note` events with `meta.leader`).
+- **Rules** (`explain.Story`), checked per blamed op in this order:
+
+| Situation | Explanation |
+| --- | --- |
+| durability FAIL, the acking node crashed right after | acknowledged before a majority stored it, then crashed |
+| durability FAIL, the acking node was on the minority side | acknowledged while cut off; the majority never stored it |
+| stale read on a node that was isolated **and** whose clock last jumped backwards | lease read on a clock that went back, after a new leader was elected |
+| stale read on an isolated node | answered from its local copy without a majority |
+| any other stale read | local copy lagging behind the log |
+| other linearizability failure | no sequential order explains the results |
+
+  It also says who the leader was at that step and whether the node that answered was that leader. At most three blamed ops are spelled out.
+- **`--llm`** sends the same facts (as JSON) plus the rule-based draft to Claude (`claude-opus-5-5` through the Anthropic Go SDK, with server-side refusal fallbacks) when `ANTHROPIC_API_KEY` is set, else to Gemini (`gemini-2.5-flash`, REST) when `GEMINI_API_KEY` is set, and asks for a rewrite of at most about 200 words that keeps every step number and node name. Without a key, or if the call fails, the rule-based story is kept and a warning is printed.
+- **Viewer:** `kuru serve` serves `explain.md`, and the details panel shows it as a collapsible **Why it failed** box above the selection details.
+- **Limits:** it explains what the checker blamed; it does not re-check anything. "Isolated" means on the minority side of a partition overlapping the op; with a bridge partition on 3 nodes both outer nodes count as isolated.
+
 ## Viewer
 
 Build it with `make web`, then run `kuru serve [--addr 127.0.0.1:7777] [--web-dir web/timeline/dist] [--open]` and open http://127.0.0.1:7777/. Without a backend, `cd web/timeline && npm run dev` serves `?run=sample` (the bundled sample) and `?run=synthetic` (50,000 generated events).
@@ -99,7 +130,7 @@ Build it with `make web`, then run `kuru serve [--addr 127.0.0.1:7777] [--web-di
   - Messages are arrows from send to delivery. Drops end in a red ✕, duplicates are dashed, delayed messages are amber.
   - A partition is a shaded band labelled with its groups. A crash is a hatched red block, a pause a grey bar, and a clock skew an amber `⏱±N ms` badge.
 - **Client lanes:** one bar per op from invoke to completion. Green = ok, grey = fail, amber = info. A thick red outline marks an op in `bad_ops`; final reads are dashed.
-- **Details panel:** a friendly description plus the raw JSON of the clicked item, and the **cluster state at the playhead** (each node up/down/paused, partition groups, clock offsets, the leader from trace notes).
+- **Details panel:** the **Why it failed** story when the run has an `explain.md`, a friendly description plus the raw JSON of the clicked item, and the **cluster state at the playhead** (each node up/down/paused, partition groups, clock offsets, and the leader from the engine's `note` events with `meta.leader`).
 - **Player:** playhead, play/pause, ±1 / ±100 steps, speed 1×–50× (1× = 100 steps/s). Events after the playhead are dimmed. **⚑ jump to first violation** moves to the first bad op and centres the view.
 - **Compare:** `?run=A&compare=B` stacks two runs with a shared playhead and viewport.
 - **Zoom and pan:** the mouse wheel zooms around the cursor and dragging pans. The minimap shows the whole run: click or drag it to move. Only the visible step range is drawn; past 1,500 ordinary messages it thins them out evenly and says so.
@@ -118,9 +149,11 @@ All endpoints are read-only `GET`s. CORS allows `http://localhost:5173` and `htt
 | Endpoint | Returns |
 | --- | --- |
 | `/api/runs` | `[{id, scenario, seed, verdict, fidelity, faults, started_at, replay_of}]`, newest first. A run is any `<runs>/<scenario>/<run>` folder with `meta.json` or `result.json`; `id` = `<scenario>/<run>` |
-| `/api/runs/{scenario}/{run}/{file}` | One of `trace.jsonl`, `history.jsonl`, `result.json`, `faults.json`, `meta.json`, `scenario.yaml`, `minimal.json`, `shrink.log`, `linearizability.html`, `logs/<node>.log`. Anything else, `..`, absolute paths and symlinks out of the runs dir → 404 |
+| `/api/runs/{scenario}/{run}/{file}` | One of `trace.jsonl`, `history.jsonl`, `result.json`, `faults.json`, `meta.json`, `scenario.yaml`, `minimal.json`, `shrink.log`, `explain.md`, `linearizability.html`, `logs/<node>.log`. Anything else, `..`, absolute paths and symlinks out of the runs dir → 404 |
 | `/api/summary/{scenario}` | `<runs>/<scenario>/summary.csv` (the explorer's) as JSON objects keyed by the header row |
 | everything else | the built viewer, with SPA fallback to `index.html`. If `--web-dir` is missing, a 503 page says to run `make web` |
+
+`kuru serve --export DIR [--only id,id]` serves nothing: it writes the same data as static files (`DIR/runs.json` and `DIR/runs/<scenario>/<run>/...`) for the viewer's demo build (`VITE_DEMO=1`), which is what the GitHub Pages live demo uses (`scripts/demo-export.sh`, `npm run build:demo`).
 
 ## README snippet
 

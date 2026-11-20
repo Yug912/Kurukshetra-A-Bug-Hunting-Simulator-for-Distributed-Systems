@@ -36,6 +36,7 @@ cp -R testdata/sample-run "$RUNS/sample/42"
 ./bin/kuru check "$RUNS/sample/42" --checkers linearizable-kv,durability || true
 go run ./scripts/brain-fakerun -scenario examples/fake-faults.yaml -seed 1 -runs-dir "$RUNS"
 ./bin/kuru shrink "$RUNS/fake-faults/1" --runner fake-faults
+./bin/kuru explain "$RUNS/sample/42" >/dev/null || true
 
 if [ "$DOCKER" = 0 ]; then
   say "done (offline only): ./bin/kuru serve --open"
@@ -72,6 +73,9 @@ if FAIL_DIR=$(first_fail toykv-stale-read); then
   ./bin/kuru shrink "$FAIL_DIR" --max-runs 60 --parallel 2
   say "replay $FAIL_DIR"
   ./bin/kuru replay "$FAIL_DIR" || true
+  say "explain $FAIL_DIR (its -min run) and the original"
+  ./bin/kuru explain "$FAIL_DIR" >/dev/null || true
+  ./bin/kuru explain --exact "$FAIL_DIR" >/dev/null || true
   echo "$FAIL_DIR" > "$RUNS/.demo-stale-read"
 else
   echo "no FAIL found for toykv-stale-read; widen --runs" >&2
@@ -80,6 +84,7 @@ fi
 for sc in toykv-lease-clock toykv-lost-write real-etcd-buggy real-etcd-fixed; do
   say "explore $sc (20 seeds)"
   ./bin/kuru explore "examples/$sc.yaml" --runs 20 --parallel 4 || true
+  if d=$(first_fail "$sc"); then ./bin/kuru explain "$d" >/dev/null || true; fi
 done
 
 say "toykv-correct over $CORRECT_SEEDS seeds (must all PASS)"

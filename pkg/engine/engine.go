@@ -214,6 +214,22 @@ func (x *run) execute(ctx context.Context) (err error) {
 	}
 	cluster := x.cluster()
 
+	// Leader notes for the viewer: client-port health polls only, so they
+	// never affect message decisions, determinism or replay.
+	urls := make(map[string]string, len(x.nodes))
+	for name, n := range x.nodes {
+		urls[name] = n.ClientURL
+	}
+	lctx, lcancel := context.WithCancel(ctx)
+	var lwg sync.WaitGroup
+	lwg.Add(1)
+	go func() {
+		defer lwg.Done()
+		newLeaderWatcher(urls, x.clock.Step, x.proxy.Emit).Run(lctx)
+	}()
+	stopLeader := func() { lcancel(); lwg.Wait() }
+	defer stopLeader()
+
 	x.timing.begin("faults_and_workload")
 	x.exec = faults.NewExecutor(x.proxy, x.ctl, x.nodeRefs(), x.proxy.Emit)
 	x.sched = scheduler.New(x.sc, x.src, x.proxy, x.tw, x.exec, x.plan, scheduler.Options{
@@ -254,6 +270,7 @@ func (x *run) execute(ctx context.Context) (err error) {
 	if err := x.finalReads(ctx, wl, cluster); err != nil {
 		return err
 	}
+	stopLeader()
 	x.tw.Append(trace.Event{Step: x.clock.Step(), Kind: trace.RunEnd})
 	x.meta.Steps = x.clock.Step()
 	st := x.sched.Stats()

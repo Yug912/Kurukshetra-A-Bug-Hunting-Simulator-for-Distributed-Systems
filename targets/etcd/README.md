@@ -65,3 +65,16 @@ A CAS with expect `""` means "key missing": `prevExist=false` in v2, `create_rev
 | `kuru/etcd:fixed` (3.5.17) | **PASS** 4/4 | PASS |
 
 With the engine: `kuru explore examples/real-etcd-buggy.yaml --runs 200` should FAIL on some seeds, and `examples/real-etcd-fixed.yaml` should pass those same seeds (pending Person A's engine on `main`).
+
+## Results at scale (2026-11-20)
+
+`kuru explore examples/real-etcd-buggy.yaml --runs 200 --parallel 4`, then the same 200 seeds (same fault plans: partitions every 300–600 steps for 300–600, crashes every 800–1200 for 200–400) on `examples/real-etcd-fixed.yaml`. MacBook Air (Apple silicon), Colima 4 CPUs, both images built locally with `scripts/brain-build-images.sh` (the v3.5.17 release download worked; no Dockerfile change needed).
+
+| Image | Seeds | FAIL | PASS | UNKNOWN | Time |
+| --- | --- | --- | --- | --- | --- |
+| `kuru/etcd:buggy` (v2.3.8, v2 API default reads) | 200 | **196** | 1 | 3 | 11 m 38 s |
+| `kuru/etcd:fixed` (v3.5.17, v3 API linearizable reads) | 200 | 0 | **200** | 0 | 11 m 16 s |
+
+- Every buggy FAIL is `linearizable-kv` ("stale read of k0 on n2: got c1-18, expected c0-19"); `durability` PASSed in all 400 runs.
+- The 3 UNKNOWN are the linearizability checker's 10 s budget (`reason: timeout`), not errors. The one PASS (seed 197) had no read land on a cut-off member while it was stale.
+- `kuru explain` on a FAIL tells the Jepsen story in the run's own terms: "n2 was on the minority side of the partition that started at step 1272, so it could not hear about newer writes, yet it still answered the read from its local copy."

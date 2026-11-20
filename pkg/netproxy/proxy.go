@@ -169,6 +169,13 @@ func listenUnshadowed() (net.Listener, error) {
 			return nil, err
 		}
 		port := l.Addr().(*net.TCPAddr).Port
+		if !shadowingPossible {
+			// Linux (and other non-BSD stacks) refuse a specific bind that
+			// overlaps a wildcard one, so nothing can shadow the proxy there,
+			// and the probe below would always fail with EADDRINUSE.
+			reservePort(port)
+			return l, nil
+		}
 		probe, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 		if err == nil {
 			_ = probe.Close()

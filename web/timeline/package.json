@@ -10,7 +10,8 @@
     "prebuild": "npm run copy-sample",
     "build": "tsc -b && vite build",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:demo": "rm -rf public/demo && cp -R demo public/demo && VITE_DEMO=1 npm run build; status=$?; rm -rf public/demo; exit $status"
   },
   "dependencies": {
     "react": "18.3.1",
