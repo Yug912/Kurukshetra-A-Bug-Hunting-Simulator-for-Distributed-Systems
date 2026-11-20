@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { listRuns, SAMPLE_ID, type RunSummary } from "../data/load";
+import { DEMO, listRuns, SAMPLE_ID, type RunSummary } from "../data/load";
 import { formatUrl, minOriginal, runIdFromPath } from "../data/url";
 import { EMPTY_FILTERS } from "./filters";
 import { VerdictBadge } from "./Header";
@@ -25,6 +25,12 @@ export function RunList() {
   return (
     <div className="runlist">
       <h1 style={{ fontSize: 18, marginTop: 0 }}>Kurukshetra runs</h1>
+      {DEMO && (
+        <p className="note" style={{ padding: 0, maxWidth: 760 }}>
+          Live demo: real runs recorded with Docker, bundled as static files. Open a <b>FAIL</b> run, press <b>⚑ jump to first violation</b>, and read
+          <b> Why it failed</b> on the right. Try <code>kuru</code> yourself: <a href="https://github.com/Yug912/Kurukshetra-A-Bug-Hunting-Simulator-for-Distributed-Systems">GitHub</a>.
+        </p>
+      )}
       {error && (
         <p className="error" style={{ padding: 0 }}>
           Could not reach the kuru API ({error}). Start <code>kuru serve</code>, or open the bundled <a href={link(SAMPLE_ID)}>sample run</a>.

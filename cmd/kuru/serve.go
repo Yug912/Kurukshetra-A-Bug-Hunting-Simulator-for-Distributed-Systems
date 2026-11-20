@@ -29,7 +29,7 @@ import (
 )
 
 func init() {
-	var addr, webDir string
+	var addr, webDir, export, only string
 	var open bool
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -37,15 +37,27 @@ func init() {
 		Long: "Serve the React timeline viewer (from --web-dir, built with `make web`) and a read-only API:\n" +
 			"  GET /api/runs                              runs under --runs-dir, newest first\n" +
 			"  GET /api/runs/{scenario}/{run}/{file}      one file of a run (allow-listed)\n" +
-			"  GET /api/summary/{scenario}                the explorer's summary.csv as JSON",
+			"  GET /api/summary/{scenario}                the explorer's summary.csv as JSON\n\n" +
+			"With --export DIR it serves nothing: it writes a static copy of /api/runs (DIR/runs.json and\n" +
+			"DIR/runs/<scenario>/<run>/...) for the viewer's demo build, limited to --only IDs if given.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if export != "" {
+				runs, err := exportRuns(runsDir(), export, splitIDs(only))
+				if err != nil {
+					return err
+				}
+				_, _ = fmt.Fprintf(cmd.OutOrStdout(), "exported %d runs to %s\n", len(runs), export)
+				return nil
+			}
 			return runServe(cmd, addr, webDir, open)
 		},
 	}
 	cmd.Flags().StringVar(&addr, "addr", "127.0.0.1:7777", "listen address")
 	cmd.Flags().StringVar(&webDir, "web-dir", filepath.Join("web", "timeline", "dist"), "built viewer to serve")
 	cmd.Flags().BoolVar(&open, "open", false, "open the viewer in a browser")
+	cmd.Flags().StringVar(&export, "export", "", "write a static copy of the runs API to this directory and exit")
+	cmd.Flags().StringVar(&only, "only", "", "with --export: comma-separated run IDs (<scenario>/<run>) to include")
 	rootCmd.AddCommand(cmd)
 }
 
@@ -90,7 +102,7 @@ func openBrowser(url string) {
 // runFiles are the files of a run that may be served (plus logs/<node>.log).
 var runFiles = map[string]bool{
 	core.TraceFile: true, core.HistoryFile: true, core.ResultFile: true, core.FaultsFile: true,
-	core.MetaFile: true, core.ScenarioFile: true, "minimal.json": true, "shrink.log": true,
+	core.MetaFile: true, core.ScenarioFile: true, "minimal.json": true, "shrink.log": true, "explain.md": true,
 	"linearizability.html": true,
 }
 

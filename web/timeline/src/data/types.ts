@@ -103,4 +103,6 @@ export interface RunData {
   faults: Fault[];
   trace: TraceEvent[];
   history: HistoryOp[];
+  /** explain.md written by `kuru explain`, if any. */
+  explain?: string | null;
 }
