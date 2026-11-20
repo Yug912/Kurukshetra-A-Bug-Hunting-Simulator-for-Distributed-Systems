@@ -1,0 +1,47 @@
+[
+  {
+    "id": "toykv-stale-read/3",
+    "scenario": "toykv-stale-read",
+    "seed": 3,
+    "verdict": "FAIL",
+    "fidelity": null,
+    "faults": 14,
+    "started_at": "2026-11-20T07:42:44Z"
+  },
+  {
+    "id": "toykv-stale-read/3-min",
+    "scenario": "toykv-stale-read",
+    "seed": 3,
+    "verdict": "FAIL",
+    "fidelity": null,
+    "faults": 0,
+    "started_at": "2026-11-20T08:09:12Z"
+  },
+  {
+    "id": "toykv-lease-clock/2",
+    "scenario": "toykv-lease-clock",
+    "seed": 2,
+    "verdict": "FAIL",
+    "fidelity": null,
+    "faults": 178,
+    "started_at": "2026-11-20T08:11:35Z"
+  },
+  {
+    "id": "real-etcd-buggy/1",
+    "scenario": "real-etcd-buggy",
+    "seed": 1,
+    "verdict": "FAIL",
+    "fidelity": null,
+    "faults": 11,
+    "started_at": "2026-11-20T08:07:27Z"
+  },
+  {
+    "id": "toykv-correct/1",
+    "scenario": "toykv-correct",
+    "seed": 1,
+    "verdict": "PASS",
+    "fidelity": null,
+    "faults": 12,
+    "started_at": "2026-11-20T07:41:21Z"
+  }
+]
