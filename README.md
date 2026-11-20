@@ -33,12 +33,12 @@ Measured on a MacBook Air (Apple silicon, Colima with 4 CPUs) on 2026-11-20, `ku
 
 | Target | Bug planted / known | Seeds | Bug found (FAIL) | Correct build under the same faults |
 | --- | --- | --- | --- | --- |
-| Toy Raft KV | stale reads (`BUG_STALE_READ`) | 20 | **20 / 20** | 20 / 20 PASS (`toykv-correct`) |
+| Toy Raft KV | stale reads (`BUG_STALE_READ`) | 20 | **20 / 20** | 20 / 20 PASS (`toykv-correct`), and 200 / 200 PASS in the demo rehearsal |
 | Toy Raft KV | acknowledged writes lost (`BUG_ACK_BEFORE_COMMIT`) | 20 | **20 / 20** | 20 / 20 PASS |
 | Toy Raft KV | lease reads on a skewable clock (`BUG_LEASE_READ`) | 30 | **23 / 30** (77%) | 30 / 30 PASS |
 | etcd 2.3.8 (real system) | stale reads under partition (Jepsen, 2014) | 200 | **196 / 200** (98%; 3 checker timeouts, 1 PASS) | etcd 3.5.17: **200 / 200 PASS** |
 
-Every FAIL comes with a minimal fault schedule (`kuru shrink`, e.g. 9 faults → 2), a replay with a fidelity score (`kuru replay`), and a plain-English root cause (`kuru explain`): *"n2 was cut off from the majority by the partition at step 546, and its clock jumped back 1688 ms at step 711 … The leader at that time was n3 (since step 670), not n2."*
+Every FAIL comes with a minimal fault schedule (`kuru shrink`: e.g. 8 faults → 2 on the fake target, or "no faults needed" for the toy KV stale read, whose followers lag even on a healthy network), a replay with a fidelity score (`kuru replay`), and a plain-English root cause (`kuru explain`): *"n2 was cut off from the majority by the partition at step 546, and its clock jumped back 1688 ms at step 711 … The leader at that time was n3 (since step 670), not n2."*
 
 ## Quick start
 
