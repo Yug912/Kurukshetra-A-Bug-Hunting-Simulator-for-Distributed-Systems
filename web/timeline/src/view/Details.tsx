@@ -1,5 +1,6 @@
 import { opLabel, opOutcome } from "../data/derive";
 import type { RunModel } from "../data/model";
+import { ExplainPanel } from "./Explain";
 import type { Selection } from "./Timeline";
 
 /** describe returns a friendly sentence and the raw records for a selection. */
@@ -56,6 +57,7 @@ export function Details({ selection, model, children }: { selection: Selection; 
   return (
     <div className="details">
       {children}
+      {model.run.explain ? <ExplainPanel text={model.run.explain} /> : null}
       {!selection ? (
         <p className="note" style={{ padding: 0 }}>
           Click a message, op, partition, crash or skew badge to see its details. Scroll to zoom, drag to pan.

@@ -230,6 +230,39 @@ button:disabled {
   margin-bottom: 8px;
 }
 
+.details .explain {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  padding: 6px 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.details .explain summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.details .explain h3 {
+  font-size: 12px;
+  margin: 8px 0 2px;
+}
+
+.details .explain p,
+.details .explain ul {
+  margin: 4px 0;
+}
+
+.details .explain ul {
+  padding-left: 16px;
+}
+
+.details .explain code {
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 .minimap {
   border-top: 1px solid var(--border);
   background: var(--panel);
