@@ -64,7 +64,7 @@ M1–M9 done on branch `anushka` (2026-11-14). Checked against Person A's engine
 
 ## Known issues
 
-- golangci-lint 2.15 reports errcheck/staticcheck findings in **shared** files (`cmd/fake-node`, `cmd/gen-sample`, `cmd/kuru/version.go`, `pkg/core`, `pkg/fakes`, `pkg/scenario`, `pkg/trace` tests), so CI's lint step fails on `main` too. My owned paths are lint-clean.
+- ~~golangci-lint findings in shared files~~ — resolved before the merge ("setup: make shared code golangci-lint clean"). Re-checked 2026-11-20: `golangci-lint run --build-tags integration ./...` (v2.15.0) reports **0 issues**, and `gofmt -l .` is empty (incl. `pkg/core/core.go`). CI's actual failure was the Linux-only proxy port probe, fixed in `pkg/netproxy` (see progress-engine.md, Known issues).
 
 ## Next step
 
