@@ -92,6 +92,7 @@ None open. Fixed directly on main as small separate commits (shared code, no con
 
 - Messages parked after the last quiet step (between final reads and proxy close) get no decision event.
 - Replay fidelity on targets with randomized timers (Raft election timeouts) is expected to be lower than on fake-node; it is reported, not guaranteed.
+- **Fixed 2026-11-20: CI red on Linux.** Every GitHub CI run since the merge failed in `go test ./pkg/netproxy` with `no unshadowed port: listen tcp 127.0.0.1:P: bind: address already in use`. `listenUnshadowed` probes 127.0.0.1:P after binding 0.0.0.0:P to catch macOS port-forward shadowing, but Linux always refuses that second bind, so every port was rejected. The probe now runs only where shadowing is possible (`darwin` and the BSDs, `shadowingPossible` in `pkg/netproxy/ports.go`); on Linux the kernel already rules shadowing out. Verified with `go test ./...` in `golang:1.26` (Linux): 20 of 20 packages ok. CI's golangci-lint is pinned to v2.15.0 instead of `latest`.
 
 ## Next step
 
